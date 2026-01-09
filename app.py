@@ -47,29 +47,15 @@ SNIPE_VERIFY_SSL = os.getenv("SNIPE_VERIFY_SSL", "true").lower() == "true"
 SNIPE_TIMEOUT = int(os.getenv("SNIPE_TIMEOUT_SECONDS", "5"))
 
 CSV_LOCK = threading.Lock()
-SEEN_SERIALS = set()
+# REMOVED: SEEN_SERIALS global variable (caused the sync bug)
 
 if not os.path.exists(COMPLETED_FOLDER):
     os.makedirs(COMPLETED_FOLDER)
 
 
 # ----- Helpers -----
-def load_existing_serials():
-    """Reads current file to prevent dupes in the 'Serial Number' column."""
-    SEEN_SERIALS.clear()
-    if os.path.exists(CURRENT_CSV):
-        try:
-            with open(CURRENT_CSV, "r", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    # Column 3 is Serial Number
-                    if "Serial Number" in row and row["Serial Number"]:
-                        SEEN_SERIALS.add(row["Serial Number"].strip().lower())
-        except Exception as e:
-            logging.error(f"Error loading serials: {e}")
-
-
 def ensure_csv():
+    """Ensures the CSV exists with headers."""
     with CSV_LOCK:
         if not os.path.exists(CURRENT_CSV) or os.path.getsize(CURRENT_CSV) == 0:
             with open(CURRENT_CSV, "w", newline="", encoding="utf-8") as f:
@@ -79,19 +65,29 @@ def ensure_csv():
 
 def append_row(data):
     ensure_csv()
-    # Check duplicate on strict Serial Number
-    serial = data.get("Serial Number", "").strip()
-
-    if serial and serial.lower() in SEEN_SERIALS:
-        return False, "Duplicate Serial detected in this batch."
+    target_serial = data.get("Serial Number", "").strip()
 
     with CSV_LOCK:
+        # 1. READ FILE to check for duplicates (Source of Truth)
+        # This fixes the multi-worker bug because they all read the same file.
+        if target_serial:
+            try:
+                with open(CURRENT_CSV, "r", encoding="utf-8") as f:
+                    reader = csv.reader(f)
+                    next(reader, None) # Skip Header
+                    for row in reader:
+                        # Column 2 is Serial Number
+                        if len(row) > 2 and row[2].strip().lower() == target_serial.lower():
+                            return False, "Duplicate Serial detected in this batch."
+            except Exception as e:
+                logging.error(f"Read error during dupe check: {e}")
+
+        # 2. WRITE if safe
         try:
-            # Order strictly: [Type, Desc, Serial, Tag]
             row = [
                 data.get("Equipment Type", ""),
                 data.get("Item Description", ""),
-                serial,
+                target_serial,
                 data.get("Temple Tag", "N/A"),
             ]
 
@@ -99,8 +95,6 @@ def append_row(data):
                 writer = csv.writer(f)
                 writer.writerow(row)
 
-            if serial:
-                SEEN_SERIALS.add(serial.lower())
             return True, "Saved"
         except Exception as e:
             return False, str(e)
@@ -145,7 +139,6 @@ def lookup_snipe(term):
 
     if rows:
         hw = rows[0]
-        # Construct Description: "Dell Optiplex 7050"
         manuf = hw.get("manufacturer", {}).get("name", "")
         model = hw.get("model", {}).get("name", "")
         full_desc = f"{manuf} {model}".strip()
@@ -163,7 +156,7 @@ def lookup_snipe(term):
 # ----- Routes -----
 @app.route("/")
 def index():
-    load_existing_serials()
+    ensure_csv()
     return render_template("index.html")
 
 
@@ -172,13 +165,10 @@ def api_lookup():
     data = request.json or {}
     term = data.get("serial", "").strip() 
 
-    # Snipe Lookup
     res = lookup_snipe(term)
-
     if res:
         return jsonify(res)
 
-    # Not found - Heuristic check
     is_likely_tag = term.upper().startswith("CPH") or (term.isdigit() and len(term) < 8)
 
     return jsonify(
@@ -243,7 +233,6 @@ def api_finalize():
                     for col_idx, value in enumerate(row, 1):
                         ws.cell(row=row_idx, column=col_idx, value=value)
 
-            # Auto-fit Columns
             for column_cells in ws.columns:
                 length = max(len(str(cell.value) or "") for cell in column_cells)
                 ws.column_dimensions[
@@ -252,9 +241,8 @@ def api_finalize():
 
             wb.save(dest_path)
 
-            # Reset session
             os.remove(CURRENT_CSV)
-            SEEN_SERIALS.clear()
+            # No need to clear SEEN_SERIALS memory anymore
 
             return jsonify({"ok": True, "filename": filename})
 
@@ -265,12 +253,12 @@ def api_finalize():
 
 @app.route("/reset_batch", methods=["POST"])
 def api_reset_batch():
-    """Wipes the current CSV and resets the memory."""
+    """Wipes the current CSV."""
     with CSV_LOCK:
         with open(CURRENT_CSV, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(CSV_HEADERS)
-        SEEN_SERIALS.clear()
+        # No memory to clear
         
     return jsonify({"ok": True})
 
@@ -294,5 +282,4 @@ def download_file(filename):
 
 if __name__ == "__main__":
     ensure_csv()
-    load_existing_serials()
     app.run(host="0.0.0.0", port=5000, debug=True)
