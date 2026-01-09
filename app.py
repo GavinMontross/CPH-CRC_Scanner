@@ -17,6 +17,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
+# --- Middleware for /CRC Prefix ---
 class PrefixMiddleware(object):
     def __init__(self, app, prefix=''):
         self.app = app
@@ -33,6 +34,7 @@ class PrefixMiddleware(object):
 
 app.wsgi_app = PrefixMiddleware(app.wsgi_app, prefix='/CRC')
 
+# --- Environment Variables ---
 SNIPE_URL = os.getenv("SNIPE_URL")
 SNIPE_TOKEN = os.getenv("SNIPE_API_TOKEN")
 CURRENT_CSV = os.getenv("CURRENT_CSV", "current_scan.csv")
@@ -149,9 +151,7 @@ def lookup_snipe(term):
         full_desc = f"{manuf} {model}".strip()
 
         return {
-            "Equipment Type": hw.get("category", {}).get(
-                "name", "Computer"
-            ),  # Default to Computer if empty
+            "Equipment Type": hw.get("category", {}).get("name", "Computer"), 
             "Item Description": full_desc,
             "Serial Number": hw.get("serial", ""),
             "Temple Tag": hw.get("asset_tag", ""),
@@ -170,35 +170,23 @@ def index():
 @app.route("/lookup", methods=["POST"])
 def api_lookup():
     data = request.json or {}
-    term = data.get(
-        "serial", ""
-    ).strip()  # This is the raw input (could be tag or serial)
+    term = data.get("serial", "").strip() 
 
     # Snipe Lookup
     res = lookup_snipe(term)
 
     if res:
-        # We found it! Return the CLEAN DATA from Snipe
-        # This fixes the issue: If you scanned a Tag, 'res' contains the real Serial.
-        # We return that real Serial so the frontend uses it.
         return jsonify(res)
 
-    # Not found in Snipe
-    # Heuristic: Is this input likely a Tag or a Serial?
-    # Temple Tags usually start with CPH or are just digits.
-    # Serials are usually alphanumeric.
+    # Not found - Heuristic check
     is_likely_tag = term.upper().startswith("CPH") or (term.isdigit() and len(term) < 8)
 
     return jsonify(
         {
-            "Equipment Type": "Computer",  # Default guess
+            "Equipment Type": "Computer",
             "Item Description": "",
-            "Serial Number": (
-                "" if is_likely_tag else term
-            ),  # If it looks like a tag, leave serial blank
-            "Temple Tag": (
-                term if is_likely_tag else ""
-            ),  # If it looks like a tag, put in tag field
+            "Serial Number": ("" if is_likely_tag else term), 
+            "Temple Tag": (term if is_likely_tag else ""),
             "found_in_snipe": False,
         }
     )
@@ -233,13 +221,11 @@ def api_finalize():
         if not os.path.exists(CURRENT_CSV):
             return jsonify({"error": "No data to finalize"}), 400
 
-        # 1. Generate Filename (YYYYMMDD-cph-crc.xlsx)
         today_str = datetime.now().strftime("%Y%m%d")
         base_name = f"{today_str}-cph-crc"
         filename = f"{base_name}.xlsx"
         dest_path = os.path.join(COMPLETED_FOLDER, filename)
 
-        # Handle duplicate filenames (append counter)
         counter = 1
         while os.path.exists(dest_path):
             filename = f"{base_name}-{counter}.xlsx"
@@ -247,7 +233,6 @@ def api_finalize():
             counter += 1
 
         try:
-            # 2. Convert CSV to Excel with Formatting
             wb = Workbook()
             ws = wb.active
             ws.title = "Scan Data"
@@ -258,18 +243,16 @@ def api_finalize():
                     for col_idx, value in enumerate(row, 1):
                         ws.cell(row=row_idx, column=col_idx, value=value)
 
-            # 3. Auto-fit Columns
+            # Auto-fit Columns
             for column_cells in ws.columns:
                 length = max(len(str(cell.value) or "") for cell in column_cells)
-                # Add a little extra padding
                 ws.column_dimensions[
                     get_column_letter(column_cells[0].column)
                 ].width = (length + 2)
 
-            # 4. Save and Cleanup
             wb.save(dest_path)
 
-            # Reset the current session
+            # Reset session
             os.remove(CURRENT_CSV)
             SEEN_SERIALS.clear()
 
@@ -280,14 +263,24 @@ def api_finalize():
             return jsonify({"error": str(e)}), 500
 
 
+@app.route("/reset_batch", methods=["POST"])
+def api_reset_batch():
+    """Wipes the current CSV and resets the memory."""
+    with CSV_LOCK:
+        with open(CURRENT_CSV, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(CSV_HEADERS)
+        SEEN_SERIALS.clear()
+        
+    return jsonify({"ok": True})
+
+
 @app.route("/completed_files", methods=["GET"])
 def api_completed_files():
     files = []
     if os.path.exists(COMPLETED_FOLDER):
-        # Look for .xlsx OR .csv (in case you have old ones)
         files = [
-            f
-            for f in os.listdir(COMPLETED_FOLDER)
+            f for f in os.listdir(COMPLETED_FOLDER)
             if f.endswith(".xlsx") or f.endswith(".csv")
         ]
     files.sort(reverse=True)

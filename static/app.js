@@ -5,26 +5,44 @@ document.addEventListener('DOMContentLoaded', () => {
     const recentTableBody = document.querySelector('#recentTable tbody');
     const fileListBody = document.getElementById('fileListBody');
     const finalizeBtn = document.getElementById('finalizeBtn');
-    const clearBtn = document.getElementById('clearBtn'); // New Clear Button
+    const clearBtn = document.getElementById('clearBtn'); // Reset Batch Button
 
     loadRecent();
     loadCompletedFiles();
 
-    // --- CLEAR BUTTON LOGIC ---
-    clearBtn.addEventListener('click', () => {
-        // 1. Empty all fields
-        document.getElementById('equipType').value = '';
-        document.getElementById('itemDesc').value = '';
-        document.getElementById('serialNum').value = '';
-        document.getElementById('templeTag').value = '';
-        scanInput.value = '';
+    // --- RESET BATCH LOGIC ---
+    clearBtn.addEventListener('click', async () => {
+        if (!confirm("⚠️ WARNING: This will DELETE all items in the current batch.\n\nAre you sure you want to start over?")) {
+            return;
+        }
 
-        // 2. Reset Badge
-        statusBadge.className = 'badge bg-secondary';
-        statusBadge.innerText = 'Ready to Scan';
+        try {
+            // Relative path 'reset_batch' handles /CRC prefix automatically
+            const res = await fetch('reset_batch', { method: 'POST' });
+            if (res.ok) {
+                // 1. Clear UI
+                recentTableBody.innerHTML = '';
+                
+                // 2. Clear inputs
+                document.getElementById('equipType').value = '';
+                document.getElementById('itemDesc').value = '';
+                document.getElementById('serialNum').value = '';
+                document.getElementById('templeTag').value = '';
+                scanInput.value = '';
 
-        // 3. Reset Focus
-        scanInput.focus();
+                // 3. Reset Badge
+                statusBadge.className = 'badge bg-secondary';
+                statusBadge.innerText = 'Batch Reset';
+                
+                scanInput.focus();
+                loadRecent(); // Should be empty now
+            } else {
+                alert("Error resetting batch.");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Network Error");
+        }
     });
 
     // --- SCAN LOGIC ---
@@ -38,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
             statusBadge.innerText = 'Searching Snipe...';
 
             try {
-                // FIX: Removed the leading '/' so it works at /CRC/lookup
+                // Relative path 'lookup'
                 const res = await fetch('lookup', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -96,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            // FIX: Removed leading '/'
+            // Relative path 'add'
             const res = await fetch('add', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -126,7 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
     finalizeBtn.addEventListener('click', async () => {
         if (!confirm("Finalize this batch? This will create the Excel file for CRC.")) return;
         try {
-            // FIX: Removed leading '/'
+            // Relative path 'finalize'
             const res = await fetch('finalize', { method: 'POST' });
             const data = await res.json();
             if (data.ok) {
@@ -145,6 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
             recentTableBody.innerHTML = '';
             data.items.forEach(row => {
                 const tr = document.createElement('tr');
+                // CSV Order: Type, Desc, Serial, Tag
                 tr.innerHTML = `
                     <td>${row[0]}</td> 
                     <td>${row[1]}</td> 

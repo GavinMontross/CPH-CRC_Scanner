@@ -44,15 +44,18 @@
             color: white;
             font-weight: 600;
         }
-        /* Ensure it stays RED when hovered, focused, or active */
+
+        /* FORCE RED STATE: Covers hover, focus, active, and clicked */
         .btn-temple:hover, 
         .btn-temple:focus, 
-        .btn-temple:active,
+        .btn-temple:active, 
+        .btn-temple:active:focus,
         .btn-temple.active {
             background-color: var(--temple-dark) !important;
             border-color: var(--temple-dark) !important;
             color: white !important;
-            box-shadow: none; /* Remove blue glow */
+            box-shadow: none !important; 
+            outline: none !important;
         }
         
         .btn-outline-temple {
@@ -122,7 +125,7 @@
                             <span id="statusBadge" class="badge bg-secondary p-2">Ready to Scan</span>
                             
                             <div class="d-flex gap-2">
-                                <button type="button" id="clearBtn" class="btn btn-outline-secondary btn-lg">Clear</button>
+                                <button type="button" id="clearBtn" class="btn btn-outline-danger btn-lg">Reset Batch</button>
                                 <button type="submit" id="saveBtn" class="btn btn-temple btn-lg px-4">Add to Batch</button>
                             </div>
                         </div>
