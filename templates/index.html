@@ -1,96 +1,159 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRC Scanner</title>
+    <title>CRC Scanner | CPH</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body {
-            background-color: #f8f9fa;
-            padding-top: 2rem;
+        :root {
+            --temple-cherry: #9D2235;
+            --temple-dark: #7b1b2a;
+            --temple-gray: #f2f2f2;
+        }
+        body { 
+            background-color: var(--temple-gray); 
+            padding-top: 2rem; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        /* Temple Branding */
+        .brand-header {
+            color: var(--temple-cherry);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 2px solid var(--temple-cherry);
+            padding-bottom: 10px;
+            margin-bottom: 20px;
         }
 
-        .scanner-box {
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        .scanner-box { 
+            background: white; 
+            padding: 2rem; 
+            border-radius: 4px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+            border-top: 5px solid var(--temple-cherry); 
+            margin-bottom: 1.5rem;
+        }
+
+        /* --- BUTTON FIXES --- */
+        .btn-temple {
+            background-color: var(--temple-cherry);
+            border-color: var(--temple-cherry);
+            color: white;
+            font-weight: 600;
+        }
+
+        /* FORCE RED STATE: Covers hover, focus, active, and clicked */
+        .btn-temple:hover, 
+        .btn-temple:focus, 
+        .btn-temple:active, 
+        .btn-temple:active:focus,
+        .btn-temple.active {
+            background-color: var(--temple-dark) !important;
+            border-color: var(--temple-dark) !important;
+            color: white !important;
+            box-shadow: none !important; 
+            outline: none !important;
+        }
+        
+        .btn-outline-temple {
+            color: var(--temple-cherry);
+            border-color: var(--temple-cherry);
+        }
+        .btn-outline-temple:hover {
+            background-color: var(--temple-cherry);
+            color: white;
+        }
+
+        .form-control:focus {
+            border-color: var(--temple-cherry);
+            box-shadow: 0 0 0 0.25rem rgba(157, 34, 53, 0.25);
+        }
+        
+        .table-hover tbody tr:hover {
+            background-color: rgba(157, 34, 53, 0.05);
         }
     </style>
 </head>
-
 <body>
     <div class="container">
+        <div class="row mb-3">
+            <div class="col-12 text-center">
+                <h2 class="brand-header">CPH Equipment Scanner</h2>
+            </div>
+        </div>
+
         <div class="row">
             <div class="col-md-7">
-                <div class="scanner-box mb-4">
+                <div class="scanner-box">
                     <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h3>Hardware Scanner</h3>
-                        <button id="finalizeBtn" class="btn btn-warning">Finalize Batch</button>
+                        <h4 class="m-0 text-secondary">New Entry</h4>
+                        <button id="finalizeBtn" class="btn btn-warning btn-sm fw-bold">Finish Batch</button>
                     </div>
-
-                    <div class="mb-3">
+                    
+                    <div class="mb-4">
                         <label class="form-label fw-bold">Scan Barcode (Serial or Tag)</label>
-                        <input type="text" id="scanInput" class="form-control form-control-lg"
-                            placeholder="Scan here..." autofocus>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text bg-light">🔍</span>
+                            <input type="text" id="scanInput" class="form-control" placeholder="Click here to scan..." autofocus>
+                        </div>
                     </div>
 
                     <form id="detailsForm">
                         <div class="row g-3">
                             <div class="col-md-6">
-                                <label class="form-label">Equipment Type</label>
+                                <label class="form-label small text-muted">Equipment Type</label>
                                 <input type="text" id="equipType" class="form-control" placeholder="e.g. Computer">
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Item Description</label>
+                                <label class="form-label small text-muted">Item Description</label>
                                 <input type="text" id="itemDesc" class="form-control" placeholder="e.g. Dell Optiplex">
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Serial Number</label>
-                                <input type="text" id="serialNum" class="form-control">
+                                <label class="form-label small text-muted">Serial Number</label>
+                                <input type="text" id="serialNum" class="form-control fw-bold">
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">Temple Tag</label>
+                                <label class="form-label small text-muted">Temple Tag</label>
                                 <input type="text" id="templeTag" class="form-control">
                             </div>
                         </div>
-
+                        
                         <div class="mt-4 d-flex justify-content-between align-items-center">
-                            <span id="statusBadge" class="badge bg-secondary">Waiting...</span>
-                            <button type="submit" id="saveBtn" class="btn btn-primary btn-lg px-5">Add to List</button>
+                            <span id="statusBadge" class="badge bg-secondary p-2">Ready to Scan</span>
+                            
+                            <div class="d-flex gap-2">
+                                <button type="button" id="clearBtn" class="btn btn-outline-danger btn-lg">Reset Batch</button>
+                                <button type="submit" id="saveBtn" class="btn btn-temple btn-lg px-4">Add to Batch</button>
+                            </div>
                         </div>
                     </form>
                 </div>
-
-                <div class="scanner-box">
-                    <h5>Current Batch</h5>
-                    <table class="table table-sm" id="recentTable">
-                        <thead>
-                            <tr>
-                                <th>Type</th>
-                                <th>Description</th>
-                                <th>Serial</th>
-                            </tr>
-                        </thead>
-                        <tbody></tbody>
-                    </table>
+                
+                <div class="scanner-box pt-3">
+                    <h6 class="text-uppercase text-muted fw-bold small mb-3">Currently in this Batch</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover" id="recentTable">
+                            <thead class="table-light"><tr><th>Type</th><th>Description</th><th>Serial</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
             <div class="col-md-5">
                 <div class="scanner-box">
-                    <h5>Completed Batches</h5>
-                    <p class="text-muted small">Files formatted for CRC.</p>
-                    <table class="table table-hover">
+                    <h5 class="text-dark mb-3">Completed Scans</h5>
+                    <p class="text-muted small">Download these files to submit to CRC.</p>
+                    <table class="table table-hover align-middle">
                         <tbody id="fileListBody"></tbody>
                     </table>
                 </div>
             </div>
         </div>
     </div>
-   <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
-
 </html>

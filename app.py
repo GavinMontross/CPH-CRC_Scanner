@@ -17,6 +17,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
+# --- Middleware for /CRC Prefix ---
 class PrefixMiddleware(object):
     def __init__(self, app, prefix=''):
         self.app = app
@@ -33,6 +34,7 @@ class PrefixMiddleware(object):
 
 app.wsgi_app = PrefixMiddleware(app.wsgi_app, prefix='/CRC')
 
+# --- Environment Variables ---
 SNIPE_URL = os.getenv("SNIPE_URL")
 SNIPE_TOKEN = os.getenv("SNIPE_API_TOKEN")
 CURRENT_CSV = os.getenv("CURRENT_CSV", "current_scan.csv")
@@ -45,29 +47,15 @@ SNIPE_VERIFY_SSL = os.getenv("SNIPE_VERIFY_SSL", "true").lower() == "true"
 SNIPE_TIMEOUT = int(os.getenv("SNIPE_TIMEOUT_SECONDS", "5"))
 
 CSV_LOCK = threading.Lock()
-SEEN_SERIALS = set()
+# REMOVED: SEEN_SERIALS global variable (caused the sync bug)
 
 if not os.path.exists(COMPLETED_FOLDER):
     os.makedirs(COMPLETED_FOLDER)
 
 
 # ----- Helpers -----
-def load_existing_serials():
-    """Reads current file to prevent dupes in the 'Serial Number' column."""
-    SEEN_SERIALS.clear()
-    if os.path.exists(CURRENT_CSV):
-        try:
-            with open(CURRENT_CSV, "r", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    # Column 3 is Serial Number
-                    if "Serial Number" in row and row["Serial Number"]:
-                        SEEN_SERIALS.add(row["Serial Number"].strip().lower())
-        except Exception as e:
-            logging.error(f"Error loading serials: {e}")
-
-
 def ensure_csv():
+    """Ensures the CSV exists with headers."""
     with CSV_LOCK:
         if not os.path.exists(CURRENT_CSV) or os.path.getsize(CURRENT_CSV) == 0:
             with open(CURRENT_CSV, "w", newline="", encoding="utf-8") as f:
@@ -77,19 +65,29 @@ def ensure_csv():
 
 def append_row(data):
     ensure_csv()
-    # Check duplicate on strict Serial Number
-    serial = data.get("Serial Number", "").strip()
-
-    if serial and serial.lower() in SEEN_SERIALS:
-        return False, "Duplicate Serial detected in this batch."
+    target_serial = data.get("Serial Number", "").strip()
 
     with CSV_LOCK:
+        # 1. READ FILE to check for duplicates (Source of Truth)
+        # This fixes the multi-worker bug because they all read the same file.
+        if target_serial:
+            try:
+                with open(CURRENT_CSV, "r", encoding="utf-8") as f:
+                    reader = csv.reader(f)
+                    next(reader, None) # Skip Header
+                    for row in reader:
+                        # Column 2 is Serial Number
+                        if len(row) > 2 and row[2].strip().lower() == target_serial.lower():
+                            return False, "Duplicate Serial detected in this batch."
+            except Exception as e:
+                logging.error(f"Read error during dupe check: {e}")
+
+        # 2. WRITE if safe
         try:
-            # Order strictly: [Type, Desc, Serial, Tag]
             row = [
                 data.get("Equipment Type", ""),
                 data.get("Item Description", ""),
-                serial,
+                target_serial,
                 data.get("Temple Tag", "N/A"),
             ]
 
@@ -97,8 +95,6 @@ def append_row(data):
                 writer = csv.writer(f)
                 writer.writerow(row)
 
-            if serial:
-                SEEN_SERIALS.add(serial.lower())
             return True, "Saved"
         except Exception as e:
             return False, str(e)
@@ -143,15 +139,12 @@ def lookup_snipe(term):
 
     if rows:
         hw = rows[0]
-        # Construct Description: "Dell Optiplex 7050"
         manuf = hw.get("manufacturer", {}).get("name", "")
         model = hw.get("model", {}).get("name", "")
         full_desc = f"{manuf} {model}".strip()
 
         return {
-            "Equipment Type": hw.get("category", {}).get(
-                "name", "Computer"
-            ),  # Default to Computer if empty
+            "Equipment Type": hw.get("category", {}).get("name", "Computer"), 
             "Item Description": full_desc,
             "Serial Number": hw.get("serial", ""),
             "Temple Tag": hw.get("asset_tag", ""),
@@ -163,42 +156,27 @@ def lookup_snipe(term):
 # ----- Routes -----
 @app.route("/")
 def index():
-    load_existing_serials()
+    ensure_csv()
     return render_template("index.html")
 
 
 @app.route("/lookup", methods=["POST"])
 def api_lookup():
     data = request.json or {}
-    term = data.get(
-        "serial", ""
-    ).strip()  # This is the raw input (could be tag or serial)
+    term = data.get("serial", "").strip() 
 
-    # Snipe Lookup
     res = lookup_snipe(term)
-
     if res:
-        # We found it! Return the CLEAN DATA from Snipe
-        # This fixes the issue: If you scanned a Tag, 'res' contains the real Serial.
-        # We return that real Serial so the frontend uses it.
         return jsonify(res)
 
-    # Not found in Snipe
-    # Heuristic: Is this input likely a Tag or a Serial?
-    # Temple Tags usually start with CPH or are just digits.
-    # Serials are usually alphanumeric.
     is_likely_tag = term.upper().startswith("CPH") or (term.isdigit() and len(term) < 8)
 
     return jsonify(
         {
-            "Equipment Type": "Computer",  # Default guess
+            "Equipment Type": "Computer",
             "Item Description": "",
-            "Serial Number": (
-                "" if is_likely_tag else term
-            ),  # If it looks like a tag, leave serial blank
-            "Temple Tag": (
-                term if is_likely_tag else ""
-            ),  # If it looks like a tag, put in tag field
+            "Serial Number": ("" if is_likely_tag else term), 
+            "Temple Tag": (term if is_likely_tag else ""),
             "found_in_snipe": False,
         }
     )
@@ -233,13 +211,11 @@ def api_finalize():
         if not os.path.exists(CURRENT_CSV):
             return jsonify({"error": "No data to finalize"}), 400
 
-        # 1. Generate Filename (YYYYMMDD-cph-crc.xlsx)
         today_str = datetime.now().strftime("%Y%m%d")
         base_name = f"{today_str}-cph-crc"
         filename = f"{base_name}.xlsx"
         dest_path = os.path.join(COMPLETED_FOLDER, filename)
 
-        # Handle duplicate filenames (append counter)
         counter = 1
         while os.path.exists(dest_path):
             filename = f"{base_name}-{counter}.xlsx"
@@ -247,7 +223,6 @@ def api_finalize():
             counter += 1
 
         try:
-            # 2. Convert CSV to Excel with Formatting
             wb = Workbook()
             ws = wb.active
             ws.title = "Scan Data"
@@ -258,20 +233,16 @@ def api_finalize():
                     for col_idx, value in enumerate(row, 1):
                         ws.cell(row=row_idx, column=col_idx, value=value)
 
-            # 3. Auto-fit Columns
             for column_cells in ws.columns:
                 length = max(len(str(cell.value) or "") for cell in column_cells)
-                # Add a little extra padding
                 ws.column_dimensions[
                     get_column_letter(column_cells[0].column)
                 ].width = (length + 2)
 
-            # 4. Save and Cleanup
             wb.save(dest_path)
 
-            # Reset the current session
             os.remove(CURRENT_CSV)
-            SEEN_SERIALS.clear()
+            # No need to clear SEEN_SERIALS memory anymore
 
             return jsonify({"ok": True, "filename": filename})
 
@@ -280,14 +251,24 @@ def api_finalize():
             return jsonify({"error": str(e)}), 500
 
 
+@app.route("/reset_batch", methods=["POST"])
+def api_reset_batch():
+    """Wipes the current CSV."""
+    with CSV_LOCK:
+        with open(CURRENT_CSV, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(CSV_HEADERS)
+        # No memory to clear
+        
+    return jsonify({"ok": True})
+
+
 @app.route("/completed_files", methods=["GET"])
 def api_completed_files():
     files = []
     if os.path.exists(COMPLETED_FOLDER):
-        # Look for .xlsx OR .csv (in case you have old ones)
         files = [
-            f
-            for f in os.listdir(COMPLETED_FOLDER)
+            f for f in os.listdir(COMPLETED_FOLDER)
             if f.endswith(".xlsx") or f.endswith(".csv")
         ]
     files.sort(reverse=True)
@@ -301,5 +282,4 @@ def download_file(filename):
 
 if __name__ == "__main__":
     ensure_csv()
-    load_existing_serials()
     app.run(host="0.0.0.0", port=5000, debug=True)
