@@ -20,14 +20,18 @@ document.addEventListener('DOMContentLoaded', () => {
             statusBadge.innerText = 'Searching Snipe...';
 
             try {
-                const res = await fetch('/lookup', {
+                // FIX: Removed the leading '/' so it works at /CRC/lookup
+                const res = await fetch('lookup', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ serial: term })
                 });
+                
+                if (!res.ok) throw new Error("Server Error: " + res.status);
+                
                 const data = await res.json();
 
-                // 1. Fill Fields with the data returned (whether found or heuristic)
+                // 1. Fill Fields
                 document.getElementById('equipType').value = data['Equipment Type'] || '';
                 document.getElementById('itemDesc').value = data['Item Description'] || '';
                 document.getElementById('serialNum').value = data['Serial Number'] || '';
@@ -43,16 +47,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 
                 // 3. Focus strategy
-                // If serial is missing (e.g. they scanned a loose tag not in system), jump to serial box
                 if (!document.getElementById('serialNum').value) {
                     document.getElementById('serialNum').focus();
                 } else {
-                    // Otherwise ready to save
                     document.getElementById('saveBtn').focus();
                 }
 
             } catch (err) {
                 console.error(err);
+                statusBadge.className = 'badge bg-danger';
                 statusBadge.innerText = 'Error';
             }
         }
@@ -75,7 +78,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            const res = await fetch('/add', {
+            // FIX: Removed leading '/'
+            const res = await fetch('add', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(payload)
@@ -102,13 +106,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- FINALIZE LOGIC ---
     finalizeBtn.addEventListener('click', async () => {
-        if (!confirm("Finalize this batch? This will create the CSV for CRC.")) return;
+        if (!confirm("Finalize this batch? This will create the Excel file for CRC.")) return;
         try {
-            const res = await fetch('/finalize', { method: 'POST' });
+            // FIX: Removed leading '/'
+            const res = await fetch('finalize', { method: 'POST' });
             const data = await res.json();
             if (data.ok) {
                 loadRecent();
                 loadCompletedFiles();
+                alert("Batch saved: " + data.filename);
             } else { alert(data.error); }
         } catch (err) { alert("Network Error"); }
     });
@@ -116,14 +122,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- HELPERS ---
     async function loadRecent() {
         try {
-            const res = await fetch('/recent');
+            // FIX: Removed leading '/'
+            const res = await fetch('recent');
             const data = await res.json();
             recentTableBody.innerHTML = '';
             data.items.forEach(row => {
-                // CSV Order: Type, Desc, Serial, Tag
                 const tr = document.createElement('tr');
+                // CSV Order: Type, Desc, Serial, Tag
                 tr.innerHTML = `
-                    <td>${row[0]}</td> <td>${row[1]}</td> <td>${row[2]}</td> `;
+                    <td>${row[0]}</td> 
+                    <td>${row[1]}</td> 
+                    <td>${row[2]}</td> `;
                 recentTableBody.appendChild(tr);
             });
         } catch (err) {}
@@ -131,14 +140,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadCompletedFiles() {
         try {
-            const res = await fetch('/completed_files');
+            // FIX: Removed leading '/'
+            const res = await fetch('completed_files');
             const data = await res.json();
             fileListBody.innerHTML = '';
             data.files.forEach(f => {
                 const tr = document.createElement('tr');
+                // FIX: Removed leading '/' in href
                 tr.innerHTML = `
                     <td>${f}</td>
-                    <td><a href="/download/${f}" class="btn btn-sm btn-outline-primary">Download</a></td>
+                    <td><a href="download/${f}" class="btn btn-sm btn-outline-temple">Download</a></td>
                 `;
                 fileListBody.appendChild(tr);
             });
