@@ -2,3 +2,4 @@
 venv
 current_scan.csv
 completed_scans
+__pycache__
