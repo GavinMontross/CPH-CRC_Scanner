@@ -17,6 +17,22 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
+class PrefixMiddleware(object):
+    def __init__(self, app, prefix=''):
+        self.app = app
+        self.prefix = prefix
+
+    def __call__(self, environ, start_response):
+        if environ['PATH_INFO'].startswith(self.prefix):
+            environ['PATH_INFO'] = environ['PATH_INFO'][len(self.prefix):]
+            environ['SCRIPT_NAME'] = self.prefix
+            return self.app(environ, start_response)
+        else:
+            start_response('404', [('Content-Type', 'text/plain')])
+            return [b"Not Found"]
+
+app.wsgi_app = PrefixMiddleware(app.wsgi_app, prefix='/CRC')
+
 SNIPE_URL = os.getenv("SNIPE_URL")
 SNIPE_TOKEN = os.getenv("SNIPE_API_TOKEN")
 CURRENT_CSV = os.getenv("CURRENT_CSV", "current_scan.csv")
