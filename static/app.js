@@ -5,9 +5,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const recentTableBody = document.querySelector('#recentTable tbody');
     const fileListBody = document.getElementById('fileListBody');
     const finalizeBtn = document.getElementById('finalizeBtn');
+    const clearBtn = document.getElementById('clearBtn'); // New Clear Button
 
     loadRecent();
     loadCompletedFiles();
+
+    // --- CLEAR BUTTON LOGIC ---
+    clearBtn.addEventListener('click', () => {
+        // 1. Empty all fields
+        document.getElementById('equipType').value = '';
+        document.getElementById('itemDesc').value = '';
+        document.getElementById('serialNum').value = '';
+        document.getElementById('templeTag').value = '';
+        scanInput.value = '';
+
+        // 2. Reset Badge
+        statusBadge.className = 'badge bg-secondary';
+        statusBadge.innerText = 'Ready to Scan';
+
+        // 3. Reset Focus
+        scanInput.focus();
+    });
 
     // --- SCAN LOGIC ---
     scanInput.addEventListener('keydown', async (e) => {
@@ -122,13 +140,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- HELPERS ---
     async function loadRecent() {
         try {
-            // FIX: Removed leading '/'
             const res = await fetch('recent');
             const data = await res.json();
             recentTableBody.innerHTML = '';
             data.items.forEach(row => {
                 const tr = document.createElement('tr');
-                // CSV Order: Type, Desc, Serial, Tag
                 tr.innerHTML = `
                     <td>${row[0]}</td> 
                     <td>${row[1]}</td> 
@@ -140,13 +156,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadCompletedFiles() {
         try {
-            // FIX: Removed leading '/'
             const res = await fetch('completed_files');
             const data = await res.json();
             fileListBody.innerHTML = '';
             data.files.forEach(f => {
                 const tr = document.createElement('tr');
-                // FIX: Removed leading '/' in href
                 tr.innerHTML = `
                     <td>${f}</td>
                     <td><a href="download/${f}" class="btn btn-sm btn-outline-temple">Download</a></td>
