@@ -10,6 +10,7 @@ import requests
 from dotenv import load_dotenv
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
+from openpyxl import load_workbook, Workbook
 
 load_dotenv()
 
@@ -43,11 +44,12 @@ CSV_HEADERS = os.getenv(
     "CSV_HEADERS", "Equipment Type,Item Description,Serial Number,Temple Tag"
 ).split(",")
 
+TEMPLATE_FILE = os.getenv("TEMPLATE_XLSX", "template.xlsx")
+
 SNIPE_VERIFY_SSL = os.getenv("SNIPE_VERIFY_SSL", "true").lower() == "true"
 SNIPE_TIMEOUT = int(os.getenv("SNIPE_TIMEOUT_SECONDS", "5"))
 
 CSV_LOCK = threading.Lock()
-# REMOVED: SEEN_SERIALS global variable (caused the sync bug)
 
 if not os.path.exists(COMPLETED_FOLDER):
     os.makedirs(COMPLETED_FOLDER)
@@ -223,33 +225,36 @@ def api_finalize():
             counter += 1
 
         try:
-            wb = Workbook()
-            ws = wb.active
-            ws.title = "Scan Data"
+            # 1. Load the template if it exists, otherwise fallback to a blank workbook
+            if os.path.exists(TEMPLATE_FILE):
+                wb = load_workbook(TEMPLATE_FILE)
+                ws = wb.active
+            else:
+                logging.warning(f"Template {TEMPLATE_FILE} not found. Creating a blank one.")
+                wb = Workbook()
+                ws = wb.active
+                ws.append(CSV_HEADERS) # Write headers manually if no template
 
+            # 2. Read CSV and append to worksheet
             with open(CURRENT_CSV, "r", encoding="utf-8") as f:
                 reader = csv.reader(f)
-                for row_idx, row in enumerate(reader, 1):
-                    for col_idx, value in enumerate(row, 1):
-                        ws.cell(row=row_idx, column=col_idx, value=value)
+                next(reader, None)  # Skip the CSV header row
+                
+                # Append each data row to the template
+                for row in reader:
+                    ws.append(row) 
 
-            for column_cells in ws.columns:
-                length = max(len(str(cell.value) or "") for cell in column_cells)
-                ws.column_dimensions[
-                    get_column_letter(column_cells[0].column)
-                ].width = (length + 2)
-
+            # 3. Save as the new destination file
             wb.save(dest_path)
 
+            # 4. Wipe the current CSV to start fresh
             os.remove(CURRENT_CSV)
-            # No need to clear SEEN_SERIALS memory anymore
 
             return jsonify({"ok": True, "filename": filename})
 
         except Exception as e:
             logging.error(f"Finalize Error: {e}")
             return jsonify({"error": str(e)}), 500
-
 
 @app.route("/reset_batch", methods=["POST"])
 def api_reset_batch():
