@@ -284,6 +284,71 @@ def api_completed_files():
 def download_file(filename):
     return send_from_directory(COMPLETED_FOLDER, filename, as_attachment=True)
 
+@app.route("/delete_row", methods=["POST"])
+def api_delete_row():
+    data = request.json or {}
+    serial_to_delete = data.get("serial", "").strip().lower()
+    
+    with CSV_LOCK:
+        if not os.path.exists(CURRENT_CSV):
+            return jsonify({"error": "No active batch"}), 400
+            
+        try:
+            with open(CURRENT_CSV, "r", encoding="utf-8") as f:
+                rows = list(csv.reader(f))
+            
+            if not rows:
+                return jsonify({"ok": True})
+
+            header = rows[0]
+            # Keep the header, and keep all rows where the serial (column index 2) DOES NOT match
+            new_rows = [header] + [r for r in rows[1:] if len(r) > 2 and r[2].strip().lower() != serial_to_delete]
+            
+            with open(CURRENT_CSV, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerows(new_rows)
+                
+            return jsonify({"ok": True})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+@app.route("/edit_row", methods=["POST"])
+def api_edit_row():
+    data = request.json or {}
+    old_serial = data.get("old_serial", "").strip().lower()
+    new_data = data.get("new_data", {})
+    
+    with CSV_LOCK:
+        try:
+            with open(CURRENT_CSV, "r", encoding="utf-8") as f:
+                rows = list(csv.reader(f))
+            
+            if not rows:
+                return jsonify({"error": "No active batch"}), 400
+
+            header = rows[0]
+            new_rows = [header]
+            
+            # Loop through and replace the row that matches the old serial
+            for r in rows[1:]:
+                if len(r) > 2 and r[2].strip().lower() == old_serial:
+                    new_rows.append([
+                        new_data.get("Equipment Type", r[0]),
+                        new_data.get("Item Description", r[1]),
+                        new_data.get("Serial Number", r[2]), # Assuming they might change the serial too
+                        new_data.get("Temple Tag", len(r) > 3 and r[3] or "N/A")
+                    ])
+                else:
+                    new_rows.append(r)
+                    
+            with open(CURRENT_CSV, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerows(new_rows)
+                
+            return jsonify({"ok": True})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
 
 if __name__ == "__main__":
     ensure_csv()

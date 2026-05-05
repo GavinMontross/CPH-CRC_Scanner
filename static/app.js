@@ -22,7 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (res.ok) {
                 // 1. Clear UI
                 recentTableBody.innerHTML = '';
-                
+
                 // 2. Clear inputs
                 document.getElementById('equipType').value = '';
                 document.getElementById('itemDesc').value = '';
@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 3. Reset Badge
                 statusBadge.className = 'badge bg-secondary';
                 statusBadge.innerText = 'Batch Reset';
-                
+
                 scanInput.focus();
                 loadRecent(); // Should be empty now
             } else {
@@ -59,12 +59,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Relative path 'lookup'
                 const res = await fetch('lookup', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ serial: term })
                 });
-                
+
                 if (!res.ok) throw new Error("Server Error: " + res.status);
-                
+
                 const data = await res.json();
 
                 // 1. Fill Fields
@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     statusBadge.className = 'badge bg-danger';
                     statusBadge.innerText = 'Not Found - Verify Info';
                 }
-                
+
                 // 3. Focus strategy
                 if (!document.getElementById('serialNum').value) {
                     document.getElementById('serialNum').focus();
@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- SAVE LOGIC ---
     detailsForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
         const payload = {
             "Equipment Type": document.getElementById('equipType').value,
             "Item Description": document.getElementById('itemDesc').value,
@@ -117,11 +117,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Relative path 'add'
             const res = await fetch('add', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
             const result = await res.json();
-            
+
             if (result.ok) {
                 // Clear and reset focus
                 scanInput.value = '';
@@ -129,7 +129,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.getElementById('itemDesc').value = '';
                 document.getElementById('serialNum').value = '';
                 document.getElementById('templeTag').value = '';
-                
+
                 statusBadge.className = 'badge bg-secondary';
                 statusBadge.innerText = 'Waiting...';
                 scanInput.focus();
@@ -155,22 +155,108 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) { alert("Network Error"); }
     });
 
+    // --- ROW ACTIONS (EDIT & DELETE) ---
+    async function deleteRow(serial) {
+        if (!confirm(`Are you sure you want to remove serial ${serial} from this batch?`)) return;
+
+        try {
+            const response = await fetch("delete_row", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ serial: serial })
+            });
+
+            if (response.ok) {
+                loadRecent();
+            } else {
+                alert("Failed to delete row.");
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    async function promptEditRow(oldType, oldDesc, oldSerial, oldTag) {
+        const newType = prompt("Equipment Type:", oldType) ?? oldType;
+        const newDesc = prompt("Item Description:", oldDesc) ?? oldDesc;
+        const newSerial = prompt("Serial Number:", oldSerial) ?? oldSerial;
+        const newTag = prompt("Temple Tag:", oldTag) ?? oldTag;
+
+        if (newType === oldType && newDesc === oldDesc && newSerial === oldSerial && newTag === oldTag) {
+            return; // Nothing changed
+        }
+
+        try {
+            const response = await fetch("edit_row", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    old_serial: oldSerial,
+                    new_data: {
+                        "Equipment Type": newType,
+                        "Item Description": newDesc,
+                        "Serial Number": newSerial,
+                        "Temple Tag": newTag
+                    }
+                })
+            });
+
+            if (response.ok) {
+                loadRecent();
+            } else {
+                alert("Failed to update row.");
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
     // --- HELPERS ---
     async function loadRecent() {
         try {
             const res = await fetch('recent');
             const data = await res.json();
             recentTableBody.innerHTML = '';
+
             data.items.forEach(row => {
                 const tr = document.createElement('tr');
-                // CSV Order: Type, Desc, Serial, Tag
+
+                const type = row[0] || "";
+                const desc = row[1] || "";
+                const serial = row[2] || "";
+                const tag = row[3] || "";
+
+                // Populate text columns
                 tr.innerHTML = `
-                    <td>${row[0]}</td> 
-                    <td>${row[1]}</td> 
-                    <td>${row[2]}</td> `;
+                    <td>${type}</td> 
+                    <td>${desc}</td> 
+                    <td class="fw-bold">${serial}</td> 
+                    <td>${tag}</td>
+                `;
+
+                // Build Actions column dynamically to avoid string escaping issues
+                const actionsTd = document.createElement('td');
+                actionsTd.className = "text-end";
+
+                const editBtn = document.createElement('button');
+                editBtn.className = "btn btn-sm btn-outline-secondary me-1";
+                editBtn.innerText = "Edit";
+                editBtn.onclick = () => promptEditRow(type, desc, serial, tag);
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = "btn btn-sm btn-outline-danger";
+                deleteBtn.innerText = "Delete";
+                deleteBtn.onclick = () => deleteRow(serial);
+
+                actionsTd.appendChild(editBtn);
+                actionsTd.appendChild(deleteBtn);
+                tr.appendChild(actionsTd);
+
                 recentTableBody.appendChild(tr);
             });
-        } catch (err) {}
+        } catch (err) {
+            console.error("Error loading recent rows:", err);
+        }
     }
 
     async function loadCompletedFiles() {
@@ -186,6 +272,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
                 fileListBody.appendChild(tr);
             });
-        } catch (err) {}
+        } catch (err) {
+            console.error("Error loading files:", err);
+        }
     }
 });
