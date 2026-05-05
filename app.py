@@ -182,12 +182,16 @@ def index():
 
 
 @app.route("/lookup", methods=["POST"])
+@app.route("/lookup", methods=["POST"])
 def api_lookup():
     data = request.json or {}
     term = data.get("serial", "").strip()
 
     res = lookup_snipe(term)
+
+    # If Snipe found it, FORCE the flag to True right before sending it back
     if res:
+        res["found_in_snipe"] = True
         return jsonify(res)
 
     is_likely_tag = term.upper().startswith("CPH") or (term.isdigit() and len(term) < 8)
@@ -197,9 +201,7 @@ def api_lookup():
             "Equipment Type": "Computer",
             "Item Description": "",
             "Serial Number": ("" if is_likely_tag else term),
-            "Temple Tag": format_temple_tag(
-                term if is_likely_tag else ""
-            ),
+            "Temple Tag": format_temple_tag(term if is_likely_tag else ""),
             "found_in_snipe": False,
         }
     )
