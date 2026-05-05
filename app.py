@@ -18,22 +18,24 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
+
 # --- Middleware for /CRC Prefix ---
 class PrefixMiddleware(object):
-    def __init__(self, app, prefix=''):
+    def __init__(self, app, prefix=""):
         self.app = app
         self.prefix = prefix
 
     def __call__(self, environ, start_response):
-        if environ['PATH_INFO'].startswith(self.prefix):
-            environ['PATH_INFO'] = environ['PATH_INFO'][len(self.prefix):]
-            environ['SCRIPT_NAME'] = self.prefix
+        if environ["PATH_INFO"].startswith(self.prefix):
+            environ["PATH_INFO"] = environ["PATH_INFO"][len(self.prefix) :]
+            environ["SCRIPT_NAME"] = self.prefix
             return self.app(environ, start_response)
         else:
-            start_response('404', [('Content-Type', 'text/plain')])
+            start_response("404", [("Content-Type", "text/plain")])
             return [b"Not Found"]
 
-app.wsgi_app = PrefixMiddleware(app.wsgi_app, prefix='/CRC')
+
+app.wsgi_app = PrefixMiddleware(app.wsgi_app, prefix="/CRC")
 
 # --- Environment Variables ---
 SNIPE_URL = os.getenv("SNIPE_URL")
@@ -65,6 +67,21 @@ def ensure_csv():
                 writer.writerow(CSV_HEADERS)
 
 
+def format_temple_tag(tag):
+    """Removes 'CPH' or cuts the string off at 5 characters."""
+    if not tag:
+        return ""
+
+    tag_str = str(tag).strip()
+
+    if tag_str.upper().startswith("CPH"):
+        # If it has CPH, remove the first 3 characters ("CPH")
+        return tag_str[3:]
+    else:
+        # If it doesn't have CPH, cut it off after the 5th character
+        return tag_str[:5]
+
+
 def append_row(data):
     ensure_csv()
     target_serial = data.get("Serial Number", "").strip()
@@ -76,10 +93,13 @@ def append_row(data):
             try:
                 with open(CURRENT_CSV, "r", encoding="utf-8") as f:
                     reader = csv.reader(f)
-                    next(reader, None) # Skip Header
+                    next(reader, None)  # Skip Header
                     for row in reader:
                         # Column 2 is Serial Number
-                        if len(row) > 2 and row[2].strip().lower() == target_serial.lower():
+                        if (
+                            len(row) > 2
+                            and row[2].strip().lower() == target_serial.lower()
+                        ):
                             return False, "Duplicate Serial detected in this batch."
             except Exception as e:
                 logging.error(f"Read error during dupe check: {e}")
@@ -146,11 +166,10 @@ def lookup_snipe(term):
         full_desc = f"{manuf} {model}".strip()
 
         return {
-            "Equipment Type": hw.get("category", {}).get("name", "Computer"), 
+            "Equipment Type": hw.get("category", {}).get("name", "Computer"),
             "Item Description": full_desc,
             "Serial Number": hw.get("serial", ""),
-            "Temple Tag": hw.get("asset_tag", ""),
-            "found_in_snipe": True,
+            "Temple Tag": format_temple_tag(hw.get("asset_tag", "")),
         }
     return None
 
@@ -165,7 +184,7 @@ def index():
 @app.route("/lookup", methods=["POST"])
 def api_lookup():
     data = request.json or {}
-    term = data.get("serial", "").strip() 
+    term = data.get("serial", "").strip()
 
     res = lookup_snipe(term)
     if res:
@@ -177,8 +196,10 @@ def api_lookup():
         {
             "Equipment Type": "Computer",
             "Item Description": "",
-            "Serial Number": ("" if is_likely_tag else term), 
-            "Temple Tag": (term if is_likely_tag else ""),
+            "Serial Number": ("" if is_likely_tag else term),
+            "Temple Tag": format_temple_tag(
+                term if is_likely_tag else ""
+            ),
             "found_in_snipe": False,
         }
     )
@@ -230,19 +251,21 @@ def api_finalize():
                 wb = load_workbook(TEMPLATE_FILE)
                 ws = wb.active
             else:
-                logging.warning(f"Template {TEMPLATE_FILE} not found. Creating a blank one.")
+                logging.warning(
+                    f"Template {TEMPLATE_FILE} not found. Creating a blank one."
+                )
                 wb = Workbook()
                 ws = wb.active
-                ws.append(CSV_HEADERS) # Write headers manually if no template
+                ws.append(CSV_HEADERS)  # Write headers manually if no template
 
             # 2. Read CSV and append to worksheet
             with open(CURRENT_CSV, "r", encoding="utf-8") as f:
                 reader = csv.reader(f)
                 next(reader, None)  # Skip the CSV header row
-                
+
                 # Append each data row to the template
                 for row in reader:
-                    ws.append(row) 
+                    ws.append(row)
 
             # 3. Save as the new destination file
             wb.save(dest_path)
@@ -256,6 +279,7 @@ def api_finalize():
             logging.error(f"Finalize Error: {e}")
             return jsonify({"error": str(e)}), 500
 
+
 @app.route("/reset_batch", methods=["POST"])
 def api_reset_batch():
     """Wipes the current CSV."""
@@ -264,7 +288,7 @@ def api_reset_batch():
             writer = csv.writer(f)
             writer.writerow(CSV_HEADERS)
         # No memory to clear
-        
+
     return jsonify({"ok": True})
 
 
@@ -273,7 +297,8 @@ def api_completed_files():
     files = []
     if os.path.exists(COMPLETED_FOLDER):
         files = [
-            f for f in os.listdir(COMPLETED_FOLDER)
+            f
+            for f in os.listdir(COMPLETED_FOLDER)
             if f.endswith(".xlsx") or f.endswith(".csv")
         ]
     files.sort(reverse=True)
@@ -284,67 +309,77 @@ def api_completed_files():
 def download_file(filename):
     return send_from_directory(COMPLETED_FOLDER, filename, as_attachment=True)
 
+
 @app.route("/delete_row", methods=["POST"])
 def api_delete_row():
     data = request.json or {}
     serial_to_delete = data.get("serial", "").strip().lower()
-    
+
     with CSV_LOCK:
         if not os.path.exists(CURRENT_CSV):
             return jsonify({"error": "No active batch"}), 400
-            
+
         try:
             with open(CURRENT_CSV, "r", encoding="utf-8") as f:
                 rows = list(csv.reader(f))
-            
+
             if not rows:
                 return jsonify({"ok": True})
 
             header = rows[0]
             # Keep the header, and keep all rows where the serial (column index 2) DOES NOT match
-            new_rows = [header] + [r for r in rows[1:] if len(r) > 2 and r[2].strip().lower() != serial_to_delete]
-            
+            new_rows = [header] + [
+                r
+                for r in rows[1:]
+                if len(r) > 2 and r[2].strip().lower() != serial_to_delete
+            ]
+
             with open(CURRENT_CSV, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 writer.writerows(new_rows)
-                
+
             return jsonify({"ok": True})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
+
 
 @app.route("/edit_row", methods=["POST"])
 def api_edit_row():
     data = request.json or {}
     old_serial = data.get("old_serial", "").strip().lower()
     new_data = data.get("new_data", {})
-    
+
     with CSV_LOCK:
         try:
             with open(CURRENT_CSV, "r", encoding="utf-8") as f:
                 rows = list(csv.reader(f))
-            
+
             if not rows:
                 return jsonify({"error": "No active batch"}), 400
 
             header = rows[0]
             new_rows = [header]
-            
+
             # Loop through and replace the row that matches the old serial
             for r in rows[1:]:
                 if len(r) > 2 and r[2].strip().lower() == old_serial:
-                    new_rows.append([
-                        new_data.get("Equipment Type", r[0]),
-                        new_data.get("Item Description", r[1]),
-                        new_data.get("Serial Number", r[2]), # Assuming they might change the serial too
-                        new_data.get("Temple Tag", len(r) > 3 and r[3] or "N/A")
-                    ])
+                    new_rows.append(
+                        [
+                            new_data.get("Equipment Type", r[0]),
+                            new_data.get("Item Description", r[1]),
+                            new_data.get(
+                                "Serial Number", r[2]
+                            ),  # Assuming they might change the serial too
+                            new_data.get("Temple Tag", len(r) > 3 and r[3] or "N/A"),
+                        ]
+                    )
                 else:
                     new_rows.append(r)
-                    
+
             with open(CURRENT_CSV, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 writer.writerows(new_rows)
-                
+
             return jsonify({"ok": True})
         except Exception as e:
             return jsonify({"error": str(e)}), 500
