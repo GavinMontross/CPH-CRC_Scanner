@@ -374,4 +374,4 @@ def api_edit_row():
             return jsonify({"error": str(e)}), 500
 
 ensure_csv()
-app.run(host="0.0.0.0", port=5001, debug=True, ssl_context=("cert.pem", "key.pem"))
+app.run(host="0.0.0.0", port=5000, debug=True, ssl_context=("cert.pem", "key.pem"))
