@@ -135,12 +135,30 @@ def lookup_snipe(term):
         except:
             return []
 
-    # Try Tag -> Serial -> Search
-    rows = get_data(f"{base_api}/hardware/bytag/{term}")
-    if not rows:
-        rows = get_data(f"{base_api}/hardware/byserial/{term}")
-    if not rows:
-        rows = get_data(f"{base_api}/hardware", params={"search": term, "limit": 1})
+    # Prepare search terms (handle Lenovo 1S prefixes, Dell/HP formatting, hyphens)
+    clean_term = term.strip()
+    terms_to_try = [clean_term]
+    
+    # Lenovo barcodes often encode "1S" + MachineType (e.g., 21LTS6GX00) + Serial (e.g., GM0WHQ1W)
+    if clean_term.upper().startswith("1S") and len(clean_term) >= 14:
+        terms_to_try.append(clean_term[-8:])  # Common 8-char Lenovo serial
+        terms_to_try.append(clean_term[2:])   # Without the 1S prefix
+        
+    if "-" in clean_term:
+        terms_to_try.append(clean_term.replace("-", ""))
+    elif len(clean_term) == 8 and clean_term[2] != '-':
+        # Try inserting hyphen e.g. GM0WHQ1W -> GM-0WHQ1W
+        terms_to_try.append(f"{clean_term[:2]}-{clean_term[2:]}")
+
+    rows = []
+    for t in terms_to_try:
+        rows = get_data(f"{base_api}/hardware/bytag/{t}")
+        if not rows:
+            rows = get_data(f"{base_api}/hardware/byserial/{t}")
+        if not rows:
+            rows = get_data(f"{base_api}/hardware", params={"search": t, "limit": 1})
+        if rows:
+            break
 
     if rows:
         hw = rows[0]

@@ -65,19 +65,20 @@ document.addEventListener('DOMContentLoaded', () => {
         cameraScanBtn.classList.add('scanning');
         isScanning = true;
 
-        // Create scanner instance with all standard barcode and QR formats
+        // Create scanner instance with all standard barcode, QR, and manufacturer formats (Dell, HP, Lenovo)
         const formatsToSupport = [
             Html5QrcodeSupportedFormats.QR_CODE,
             Html5QrcodeSupportedFormats.CODE_128,
             Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.CODE_93,
             Html5QrcodeSupportedFormats.EAN_13,
             Html5QrcodeSupportedFormats.EAN_8,
             Html5QrcodeSupportedFormats.UPC_A,
             Html5QrcodeSupportedFormats.UPC_E,
             Html5QrcodeSupportedFormats.ITF,
-            Html5QrcodeSupportedFormats.CODE_93,
             Html5QrcodeSupportedFormats.CODABAR,
-            Html5QrcodeSupportedFormats.DATA_MATRIX
+            Html5QrcodeSupportedFormats.DATA_MATRIX,
+            Html5QrcodeSupportedFormats.PDF_417
         ];
 
         html5QrCode = new Html5Qrcode("camera-region", {
@@ -86,25 +87,38 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const config = {
-            fps: 15,
+            fps: 10,
             qrbox: function(viewfinderWidth, viewfinderHeight) {
-                const minDim = Math.min(viewfinderWidth, viewfinderHeight);
-                const size = Math.floor(minDim * 0.8);
-                return { width: size, height: size };
+                // Wide horizontal box optimized for 1D equipment barcodes (Dell, HP, Lenovo) & QR codes
+                const width = Math.floor(viewfinderWidth * 0.95);
+                const height = Math.min(Math.floor(viewfinderHeight * 0.65), 240);
+                return { width: width, height: height };
             },
-            aspectRatio: 1.0
+            disableFlip: false
         };
 
-        // Standard facingMode: "environment" (guaranteed to work across all mobile browsers)
+        // Request high-res feed so thin barcode lines are clear, with fallback for older browsers
         html5QrCode.start(
-            { facingMode: "environment" },
+            {
+                facingMode: "environment",
+                width: { ideal: 1920 },
+                height: { ideal: 1080 }
+            },
             config,
             onScanSuccess,
             onScanFailure
         ).catch(err => {
-            console.error("Camera start error:", err);
-            showToast("Camera error: " + (err.name || err.message || "access denied"), true);
-            stopCamera();
+            console.warn("High-res camera failed, falling back to basic camera config:", err);
+            html5QrCode.start(
+                { facingMode: "environment" },
+                config,
+                onScanSuccess,
+                onScanFailure
+            ).catch(err2 => {
+                console.error("Camera start error:", err2);
+                showToast("Camera error: " + (err2.name || err2.message || "access denied"), true);
+                stopCamera();
+            });
         });
     }
 
