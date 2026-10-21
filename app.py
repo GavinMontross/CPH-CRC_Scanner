@@ -19,23 +19,6 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
 
-# --- Middleware for /CRC Prefix ---
-class PrefixMiddleware(object):
-    def __init__(self, app, prefix=""):
-        self.app = app
-        self.prefix = prefix
-
-    def __call__(self, environ, start_response):
-        if environ["PATH_INFO"].startswith(self.prefix):
-            environ["PATH_INFO"] = environ["PATH_INFO"][len(self.prefix) :]
-            environ["SCRIPT_NAME"] = self.prefix
-            return self.app(environ, start_response)
-        else:
-            start_response("404", [("Content-Type", "text/plain")])
-            return [b"Not Found"]
-
-
-app.wsgi_app = PrefixMiddleware(app.wsgi_app, prefix="/CRC")
 
 # --- Environment Variables ---
 SNIPE_URL = os.getenv("SNIPE_URL")
@@ -386,7 +369,5 @@ def api_edit_row():
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-
-if __name__ == "__main__":
-    ensure_csv()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+ensure_csv()
+app.run(host="0.0.0.0", port=5000, debug=True)
