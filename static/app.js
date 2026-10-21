@@ -59,27 +59,71 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Auto-restart camera with new format filters if user changes mode during scan
+    document.querySelectorAll('input[name="scanMode"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+            if (isScanning) {
+                stopCamera();
+                setTimeout(startCamera, 150);
+            }
+        });
+    });
+
     function startCamera() {
         cameraRegion.style.display = 'block';
         cameraScanBtn.textContent = '⏹ Stop Camera';
         cameraScanBtn.classList.add('scanning');
         isScanning = true;
 
-        // Create scanner instance with all standard barcode, QR, and manufacturer formats (Dell, HP, Lenovo)
-        const formatsToSupport = [
-            Html5QrcodeSupportedFormats.QR_CODE,
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.CODE_39,
-            Html5QrcodeSupportedFormats.CODE_93,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.UPC_E,
-            Html5QrcodeSupportedFormats.ITF,
-            Html5QrcodeSupportedFormats.CODABAR,
-            Html5QrcodeSupportedFormats.DATA_MATRIX,
-            Html5QrcodeSupportedFormats.PDF_417
-        ];
+        const mode = document.querySelector('input[name="scanMode"]:checked')?.value || 'barcode';
+
+        let formatsToSupport;
+        let qrboxFn;
+
+        if (mode === 'barcode') {
+            // Strictly 1D equipment barcodes (Lenovo, Dell, HP) - IGNORES all QR codes
+            formatsToSupport = [
+                Html5QrcodeSupportedFormats.CODE_128,
+                Html5QrcodeSupportedFormats.CODE_39,
+                Html5QrcodeSupportedFormats.CODE_93,
+                Html5QrcodeSupportedFormats.ITF,
+                Html5QrcodeSupportedFormats.CODABAR,
+                Html5QrcodeSupportedFormats.EAN_13,
+                Html5QrcodeSupportedFormats.UPC_A
+            ];
+            qrboxFn = function(viewfinderWidth, viewfinderHeight) {
+                // Wide horizontal slot matching equipment barcode strips
+                return { width: Math.floor(viewfinderWidth * 0.95), height: 140 };
+            };
+        } else if (mode === 'qr') {
+            // Strictly 2D codes (Temple University Asset Tags)
+            formatsToSupport = [
+                Html5QrcodeSupportedFormats.QR_CODE,
+                Html5QrcodeSupportedFormats.DATA_MATRIX
+            ];
+            qrboxFn = function(viewfinderWidth, viewfinderHeight) {
+                const minDim = Math.min(viewfinderWidth, viewfinderHeight);
+                const size = Math.floor(minDim * 0.75);
+                return { width: size, height: size };
+            };
+        } else {
+            // Both modes enabled
+            formatsToSupport = [
+                Html5QrcodeSupportedFormats.QR_CODE,
+                Html5QrcodeSupportedFormats.CODE_128,
+                Html5QrcodeSupportedFormats.CODE_39,
+                Html5QrcodeSupportedFormats.CODE_93,
+                Html5QrcodeSupportedFormats.ITF,
+                Html5QrcodeSupportedFormats.CODABAR,
+                Html5QrcodeSupportedFormats.EAN_13,
+                Html5QrcodeSupportedFormats.UPC_A,
+                Html5QrcodeSupportedFormats.DATA_MATRIX,
+                Html5QrcodeSupportedFormats.PDF_417
+            ];
+            qrboxFn = function(viewfinderWidth, viewfinderHeight) {
+                return { width: Math.floor(viewfinderWidth * 0.95), height: 240 };
+            };
+        }
 
         html5QrCode = new Html5Qrcode("camera-region", {
             formatsToSupport: formatsToSupport,
@@ -88,12 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const config = {
             fps: 10,
-            qrbox: function(viewfinderWidth, viewfinderHeight) {
-                // Wide horizontal box optimized for 1D equipment barcodes (Dell, HP, Lenovo) & QR codes
-                const width = Math.floor(viewfinderWidth * 0.95);
-                const height = Math.min(Math.floor(viewfinderHeight * 0.65), 240);
-                return { width: width, height: height };
-            },
+            qrbox: qrboxFn,
             disableFlip: false
         };
 
@@ -103,7 +142,17 @@ document.addEventListener('DOMContentLoaded', () => {
             config,
             onScanSuccess,
             onScanFailure
-        ).catch(err => {
+        ).then(() => {
+            // Add red alignment guide laser line inside viewfinder for 1D barcodes
+            if (mode === 'barcode' || mode === 'both') {
+                const existingLaser = cameraRegion.querySelector('.barcode-laser');
+                if (!existingLaser) {
+                    const laser = document.createElement('div');
+                    laser.className = 'barcode-laser';
+                    cameraRegion.appendChild(laser);
+                }
+            }
+        }).catch(err => {
             console.error("Camera start error:", err);
             showToast("Camera error: " + (err.name || err.message || "access denied"), true);
             stopCamera();
@@ -117,6 +166,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 html5QrCode = null;
             }).catch(err => console.error("Camera stop error:", err));
         }
+        const laser = cameraRegion.querySelector('.barcode-laser');
+        if (laser) laser.remove();
+
         cameraRegion.style.display = 'none';
         cameraScanBtn.textContent = '📷 Tap to Scan';
         cameraScanBtn.classList.remove('scanning');
@@ -126,10 +178,27 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastScanTime = 0;
     const SCAN_COOLDOWN_MS = 2000; // Prevent rapid duplicate scans
 
+    function sanitizeScannedText(text) {
+        let clean = (text || '').trim();
+        // Extract serial if user accidentally scanned a Lenovo support QR URL
+        if (clean.toLowerCase().includes('lenovo.com') || clean.toLowerCase().includes('pcsupport')) {
+            const parts = clean.split('/').filter(p => p.length > 0);
+            if (parts.length > 0) {
+                const candidate = parts[parts.length - 1].split('?')[0].split('#')[0];
+                if (candidate.length >= 6 && candidate.length <= 14) {
+                    return candidate.toUpperCase();
+                }
+            }
+        }
+        return clean;
+    }
+
     function onScanSuccess(decodedText, decodedResult) {
         const now = Date.now();
         if (now - lastScanTime < SCAN_COOLDOWN_MS) return;
         lastScanTime = now;
+
+        const targetCode = sanitizeScannedText(decodedText);
 
         // Haptic feedback on supported devices
         if (navigator.vibrate) navigator.vibrate(100);
@@ -138,13 +207,13 @@ document.addEventListener('DOMContentLoaded', () => {
         cameraRegion.classList.add('scan-flash');
         setTimeout(() => cameraRegion.classList.remove('scan-flash'), 400);
 
-        showToast('Scanned: ' + decodedText);
+        showToast('Scanned: ' + targetCode);
 
         // Stop camera after successful scan
         stopCamera();
 
         // Trigger lookup
-        performLookup(decodedText.trim());
+        performLookup(targetCode);
     }
 
     function onScanFailure(error) {
