@@ -97,28 +97,16 @@ document.addEventListener('DOMContentLoaded', () => {
             disableFlip: false
         };
 
-        // Request high-res feed so thin barcode lines are clear, with fallback for older browsers
+        // html5-qrcode strictly requires cameraIdOrConfig to have EXACTLY 1 key: facingMode
         html5QrCode.start(
-            {
-                facingMode: "environment",
-                width: { ideal: 1920 },
-                height: { ideal: 1080 }
-            },
+            { facingMode: "environment" },
             config,
             onScanSuccess,
             onScanFailure
         ).catch(err => {
-            console.warn("High-res camera failed, falling back to basic camera config:", err);
-            html5QrCode.start(
-                { facingMode: "environment" },
-                config,
-                onScanSuccess,
-                onScanFailure
-            ).catch(err2 => {
-                console.error("Camera start error:", err2);
-                showToast("Camera error: " + (err2.name || err2.message || "access denied"), true);
-                stopCamera();
-            });
+            console.error("Camera start error:", err);
+            showToast("Camera error: " + (err.name || err.message || "access denied"), true);
+            stopCamera();
         });
     }
 
