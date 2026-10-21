@@ -15,6 +15,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let html5QrCode = null;
     let isScanning = false;
+    let nativeScanInterval = null;
+    let currentZoom = 1.0;
+    let isTorchOn = false;
+
+    const cameraControls = document.getElementById('cameraControls');
+    const zoomBtn = document.getElementById('zoomBtn');
+    const torchBtn = document.getElementById('torchBtn');
+
+    if (zoomBtn) {
+        zoomBtn.addEventListener('click', async () => {
+            if (!html5QrCode || !isScanning) return;
+            try {
+                const caps = html5QrCode.getRunningTrackCapabilities() || {};
+                const maxZ = (caps.zoom && caps.zoom.max) || 2.0;
+                currentZoom = currentZoom <= 1.0 ? Math.min(2.5, maxZ) : 1.0;
+                await html5QrCode.applyVideoConstraints({ advanced: [{ zoom: currentZoom }] });
+                zoomBtn.textContent = currentZoom > 1.0 ? '🔍 1x Reset' : '🔍 2x Zoom';
+                zoomBtn.classList.toggle('btn-primary', currentZoom > 1.0);
+                zoomBtn.classList.toggle('btn-outline-secondary', currentZoom <= 1.0);
+            } catch (e) {
+                console.warn('Zoom failed:', e);
+            }
+        });
+    }
+
+    if (torchBtn) {
+        torchBtn.addEventListener('click', async () => {
+            if (!html5QrCode || !isScanning) return;
+            try {
+                isTorchOn = !isTorchOn;
+                await html5QrCode.applyVideoConstraints({ advanced: [{ torch: isTorchOn }] });
+                torchBtn.textContent = isTorchOn ? '🔦 Off' : '🔦 Light';
+                torchBtn.classList.toggle('btn-warning', isTorchOn);
+                torchBtn.classList.toggle('btn-outline-secondary', !isTorchOn);
+            } catch (e) {
+                console.warn('Torch failed:', e);
+            }
+        });
+    }
 
     loadRecent();
     loadCompletedFiles();
@@ -142,7 +181,38 @@ document.addEventListener('DOMContentLoaded', () => {
             config,
             onScanSuccess,
             onScanFailure
-        ).then(() => {
+        ).then(async () => {
+            // Hardware capabilities (Zoom & Torch)
+            let caps = {};
+            try {
+                caps = html5QrCode.getRunningTrackCapabilities() || {};
+            } catch (e) {}
+
+            let hasControls = false;
+            if (caps.zoom && caps.zoom.max > 1.0) {
+                zoomBtn.style.display = 'inline-block';
+                zoomBtn.textContent = '🔍 2x Zoom';
+                zoomBtn.className = 'btn btn-sm btn-outline-secondary px-3 fw-bold';
+                currentZoom = 1.0;
+                hasControls = true;
+            } else {
+                zoomBtn.style.display = 'none';
+            }
+
+            if (caps.torch) {
+                torchBtn.style.display = 'inline-block';
+                torchBtn.textContent = '🔦 Light';
+                torchBtn.className = 'btn btn-sm btn-outline-secondary px-3 fw-bold';
+                isTorchOn = false;
+                hasControls = true;
+            } else {
+                torchBtn.style.display = 'none';
+            }
+
+            if (hasControls && cameraControls) {
+                cameraControls.style.display = 'flex';
+            }
+
             // Add red alignment guide laser line inside viewfinder for 1D barcodes
             if (mode === 'barcode' || mode === 'both') {
                 const existingLaser = cameraRegion.querySelector('.barcode-laser');
@@ -150,6 +220,40 @@ document.addEventListener('DOMContentLoaded', () => {
                     const laser = document.createElement('div');
                     laser.className = 'barcode-laser';
                     cameraRegion.appendChild(laser);
+                }
+            }
+
+            // High-Resolution Native BarcodeDetector (reads thin 1D Code 128 barcodes directly from full-res video)
+            if ('BarcodeDetector' in window) {
+                try {
+                    const supportedFormats = await BarcodeDetector.getSupportedFormats();
+                    const desiredFormats = mode === 'barcode'
+                        ? ['code_128', 'code_39', 'code_93', 'itf', 'ean_13', 'upc_a']
+                        : (mode === 'qr' ? ['qr_code', 'data_matrix'] : supportedFormats);
+                    const finalFormats = desiredFormats.filter(f => supportedFormats.includes(f));
+
+                    if (finalFormats.length > 0) {
+                        const detector = new BarcodeDetector({ formats: finalFormats });
+                        const videoEl = cameraRegion.querySelector('video');
+                        if (videoEl) {
+                            if (nativeScanInterval) clearInterval(nativeScanInterval);
+                            nativeScanInterval = setInterval(async () => {
+                                if (!isScanning || videoEl.readyState < 2) return;
+                                try {
+                                    const results = await detector.detect(videoEl);
+                                    if (results && results.length > 0) {
+                                        const raw = results[0].rawValue;
+                                        if (raw) {
+                                            clearInterval(nativeScanInterval);
+                                            onScanSuccess(raw);
+                                        }
+                                    }
+                                } catch (detErr) {}
+                            }, 100);
+                        }
+                    }
+                } catch (bErr) {
+                    console.warn('Native BarcodeDetector not available:', bErr);
                 }
             }
         }).catch(err => {
@@ -160,6 +264,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function stopCamera() {
+        if (nativeScanInterval) {
+            clearInterval(nativeScanInterval);
+            nativeScanInterval = null;
+        }
+        if (cameraControls) {
+            cameraControls.style.display = 'none';
+        }
         if (html5QrCode) {
             html5QrCode.stop().then(() => {
                 html5QrCode.clear();

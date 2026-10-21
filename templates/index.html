@@ -359,7 +359,13 @@
                         </div>
 
                         <!-- Camera viewfinder -->
-                        <div id="camera-region" style="display:none; margin-bottom:1rem;"></div>
+                        <div id="camera-region" style="display:none; margin-bottom:0.5rem;"></div>
+
+                        <!-- Camera Quick Controls (Zoom / Torch) -->
+                        <div id="cameraControls" class="justify-content-center gap-2 mb-3" style="display:none;">
+                            <button type="button" id="zoomBtn" class="btn btn-sm btn-outline-secondary px-3 fw-bold">🔍 2x Zoom</button>
+                            <button type="button" id="torchBtn" class="btn btn-sm btn-outline-secondary px-3 fw-bold">🔦 Light</button>
+                        </div>
 
                         <!-- Manual input fallback -->
                         <div class="mb-3">
