@@ -3,21 +3,39 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CRC Scanner">
     <title>CRC Scanner | CPH</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="icon" href="\images\templelogo.png" type="image/png">
+    <link rel="icon" href="/images/templelogo.png" type="image/png">
+    <link rel="apple-touch-icon" href="/images/templelogo.png">
+
+    <!-- html5-qrcode: supports QR codes + barcodes (Code128, EAN, UPC, etc.) via camera -->
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
     <style>
         :root {
             --temple-cherry: #9D2235;
             --temple-dark: #7b1b2a;
-            --temple-gray: #f2f2f2;
+            --temple-gray: #f5f5f5;
         }
+
+        * { box-sizing: border-box; }
 
         body {
             background-color: var(--temple-gray);
-            padding-top: 2rem;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 0;
+            margin: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .app-container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 1rem;
         }
 
         /* Temple Branding */
@@ -26,21 +44,23 @@
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 1px;
-            border-bottom: 2px solid var(--temple-cherry);
+            border-bottom: 3px solid var(--temple-cherry);
             padding-bottom: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
+            font-size: 1.4rem;
+            text-align: center;
         }
 
         .scanner-box {
             background: white;
-            padding: 2rem;
-            border-radius: 4px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-            border-top: 5px solid var(--temple-cherry);
-            margin-bottom: 1.5rem;
+            padding: 1.25rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+            border-top: 4px solid var(--temple-cherry);
+            margin-bottom: 1rem;
         }
 
-        /* --- BUTTON FIXES --- */
+        /* --- Buttons --- */
         .btn-temple {
             background-color: var(--temple-cherry);
             border-color: var(--temple-cherry);
@@ -48,7 +68,6 @@
             font-weight: 600;
         }
 
-        /* FORCE RED STATE: Covers hover, focus, active, and clicked */
         .btn-temple:hover,
         .btn-temple:focus,
         .btn-temple:active,
@@ -79,97 +98,320 @@
         .table-hover tbody tr:hover {
             background-color: rgba(157, 34, 53, 0.05);
         }
+
+        /* --- Camera Scanner --- */
+        #camera-region {
+            position: relative;
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
+        }
+
+        #camera-region video {
+            border-radius: 8px;
+        }
+
+        .scan-btn-group {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .scan-btn-group .btn {
+            flex: 1;
+            font-size: 1rem;
+            padding: 0.75rem;
+            border-radius: 8px;
+        }
+
+        #cameraScanBtn {
+            background: var(--temple-cherry);
+            border: none;
+            color: white;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        #cameraScanBtn:active {
+            background: var(--temple-dark);
+        }
+
+        #cameraScanBtn.scanning {
+            background: #dc3545;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        /* Status badge */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        /* Tab navigation for mobile */
+        .mobile-tabs {
+            display: none;
+        }
+
+        /* --- Mobile Optimizations --- */
+        @media (max-width: 767px) {
+            .app-container {
+                padding: 0.5rem;
+            }
+
+            .brand-header {
+                font-size: 1.1rem;
+                margin-bottom: 10px;
+                padding-bottom: 8px;
+            }
+
+            .scanner-box {
+                padding: 1rem;
+                border-radius: 8px;
+            }
+
+            .desktop-sidebar {
+                display: none;
+            }
+
+            .mobile-tabs {
+                display: flex;
+                gap: 0;
+                margin-bottom: 0.75rem;
+                background: white;
+                border-radius: 8px;
+                overflow: hidden;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            }
+
+            .mobile-tabs button {
+                flex: 1;
+                border: none;
+                background: white;
+                padding: 0.6rem;
+                font-size: 0.85rem;
+                font-weight: 600;
+                color: #666;
+                border-bottom: 3px solid transparent;
+                transition: all 0.2s;
+            }
+
+            .mobile-tabs button.active {
+                color: var(--temple-cherry);
+                border-bottom-color: var(--temple-cherry);
+            }
+
+            .tab-content-section {
+                display: none;
+            }
+
+            .tab-content-section.active {
+                display: block;
+            }
+
+            /* Bigger touch targets */
+            .btn {
+                min-height: 44px;
+            }
+
+            .form-control {
+                font-size: 16px !important; /* Prevents iOS zoom on focus */
+            }
+
+            .table {
+                font-size: 0.82rem;
+            }
+
+            .table .btn-sm {
+                padding: 0.35rem 0.5rem;
+                font-size: 0.75rem;
+            }
+        }
+
+        /* Desktop keeps the 2-column layout */
+        @media (min-width: 768px) {
+            .app-container {
+                padding: 2rem 1rem;
+            }
+
+            .brand-header {
+                font-size: 1.5rem;
+            }
+        }
+
+        /* Haptic-style flash on scan success */
+        .scan-flash {
+            animation: flashGreen 0.4s ease-out;
+        }
+
+        @keyframes flashGreen {
+            0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.6); }
+            100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+        }
+
+        /* Scan result toast */
+        .scan-toast {
+            position: fixed;
+            top: 1rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #28a745;
+            color: white;
+            padding: 0.6rem 1.5rem;
+            border-radius: 25px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            z-index: 9999;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        .scan-toast.show {
+            opacity: 1;
+        }
+
+        .scan-toast.error {
+            background: #dc3545;
+        }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <div class="row mb-3">
-            <div class="col-12 text-center">
-                <h2 class="brand-header">CPH CRC Scanner</h2>
-            </div>
+    <!-- Toast notification -->
+    <div id="scanToast" class="scan-toast"></div>
+
+    <div class="app-container">
+        <h2 class="brand-header">CPH CRC Scanner</h2>
+
+        <!-- Mobile tab bar -->
+        <div class="mobile-tabs" id="mobileTabs">
+            <button class="active" data-tab="scanner-tab">📷 Scanner</button>
+            <button data-tab="batch-tab">📋 Batch</button>
+            <button data-tab="files-tab">📁 Files</button>
         </div>
 
         <div class="row">
+            <!-- Main Column -->
             <div class="col-md-7">
-                <div class="scanner-box">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h4 class="m-0 text-secondary">New Entry</h4>
-                        <button id="finalizeBtn" class="btn btn-warning btn-sm fw-bold">Finish Batch</button>
+                <!-- SCANNER TAB -->
+                <div class="tab-content-section active" id="scanner-tab">
+                    <div class="scanner-box">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="m-0 text-secondary" style="font-size:1rem;">New Entry</h5>
+                            <button id="finalizeBtn" class="btn btn-warning btn-sm fw-bold">Finish Batch</button>
+                        </div>
+
+                        <!-- Camera scan button -->
+                        <div class="scan-btn-group">
+                            <button id="cameraScanBtn" class="btn">📷 Tap to Scan</button>
+                        </div>
+
+                        <!-- Camera viewfinder -->
+                        <div id="camera-region" style="display:none; margin-bottom:1rem;"></div>
+
+                        <!-- Manual input fallback -->
+                        <div class="mb-3">
+                            <label class="form-label small text-muted fw-bold">Or type / paste a code:</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light">🔍</span>
+                                <input type="text" id="scanInput" class="form-control" placeholder="Serial or Tag..."
+                                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+                                <button class="btn btn-temple" type="button" id="manualLookupBtn">Go</button>
+                            </div>
+                        </div>
+
+                        <!-- Details form -->
+                        <form id="detailsForm">
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label class="form-label small text-muted">Equipment Type</label>
+                                    <input type="text" id="equipType" class="form-control" placeholder="e.g. Computer">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small text-muted">Item Description</label>
+                                    <input type="text" id="itemDesc" class="form-control" placeholder="e.g. Dell Optiplex">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small text-muted">Serial Number</label>
+                                    <input type="text" id="serialNum" class="form-control fw-bold">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small text-muted">Temple Tag</label>
+                                    <input type="text" id="templeTag" class="form-control">
+                                </div>
+                            </div>
+
+                            <div class="status-bar mt-3">
+                                <span id="statusBadge" class="badge bg-secondary p-2">Ready to Scan</span>
+                                <div class="d-flex gap-2">
+                                    <button type="button" id="clearBtn"
+                                        class="btn btn-outline-danger btn-sm">Reset Batch</button>
+                                    <button type="submit" id="saveBtn"
+                                        class="btn btn-temple px-4">Add to Batch</button>
+                                </div>
+                            </div>
+                        </form>
                     </div>
-
-                    <div class="mb-4">
-                        <label class="form-label fw-bold">Scan Barcode (Serial or Tag)</label>
-                        <div class="input-group input-group-lg">
-                            <span class="input-group-text bg-light">🔍</span>
-                            <input type="text" id="scanInput" class="form-control" placeholder="Click here to scan..."
-                                autofocus>
-                        </div>
-                    </div>
-
-                    <form id="detailsForm">
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label small text-muted">Equipment Type</label>
-                                <input type="text" id="equipType" class="form-control" placeholder="e.g. Computer">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label small text-muted">Item Description</label>
-                                <input type="text" id="itemDesc" class="form-control" placeholder="e.g. Dell Optiplex">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label small text-muted">Serial Number</label>
-                                <input type="text" id="serialNum" class="form-control fw-bold">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label small text-muted">Temple Tag</label>
-                                <input type="text" id="templeTag" class="form-control">
-                            </div>
-                        </div>
-
-                        <div class="mt-4 d-flex justify-content-between align-items-center">
-                            <span id="statusBadge" class="badge bg-secondary p-2">Ready to Scan</span>
-
-                            <div class="d-flex gap-2">
-                                <button type="button" id="clearBtn" class="btn btn-outline-danger btn-lg">Reset
-                                    Batch</button>
-                                <button type="submit" id="saveBtn" class="btn btn-temple btn-lg px-4">Add to
-                                    Batch</button>
-                            </div>
-                        </div>
-                    </form>
                 </div>
 
-                <div class="scanner-box pt-3">
-                    <h6 class="text-uppercase text-muted fw-bold small mb-3">Currently in this Batch</h6>
-                    <div class="table-responsive">
-                        <table class="table table-sm table-hover align-middle" id="recentTable">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Equipment Type</th>
-                                    <th>Item Description</th>
-                                    <th>Serial Number</th>
-                                    <th>Temple Tag</th>
-                                    <th class="text-end">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
+                <!-- BATCH TAB -->
+                <div class="tab-content-section active" id="batch-tab">
+                    <div class="scanner-box pt-3">
+                        <h6 class="text-uppercase text-muted fw-bold small mb-2">Currently in this Batch</h6>
+                        <div id="batchCount" class="text-muted small mb-2"></div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover align-middle" id="recentTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Type</th>
+                                        <th>Description</th>
+                                        <th>Serial</th>
+                                        <th>Tag</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div class="col-md-5">
-                <div class="scanner-box">
-                    <h5 class="text-dark mb-3">Completed Scans</h5>
+            <!-- Sidebar / FILES TAB -->
+            <div class="col-md-5 desktop-sidebar">
+                <div class="scanner-box" id="files-section-desktop">
+                    <h5 class="text-dark mb-3" style="font-size:1rem;">Completed Scans</h5>
                     <p class="text-muted small">Download these files to submit to CRC.</p>
                     <table class="table table-hover align-middle">
                         <tbody id="fileListBody"></tbody>
                     </table>
                 </div>
             </div>
+
+            <!-- Mobile-only files tab -->
+            <div class="col-12">
+                <div class="tab-content-section" id="files-tab">
+                    <div class="scanner-box">
+                        <h5 class="text-dark mb-3" style="font-size:1rem;">Completed Scans</h5>
+                        <p class="text-muted small">Download these files to submit to CRC.</p>
+                        <table class="table table-hover align-middle">
+                            <tbody id="fileListBodyMobile"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
+
     <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 

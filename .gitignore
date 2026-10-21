@@ -1,5 +1,8 @@
 .env
-venv
+/.venv
 current_scan.csv
 completed_scans
 __pycache__
+
+cert.pem
+key.pem

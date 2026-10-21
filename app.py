@@ -158,13 +158,17 @@ def lookup_snipe(term):
 
 
 # ----- Routes -----
+@app.route("/images/<path:filename>")
+def serve_image(filename):
+    return send_from_directory("images", filename)
+
+
 @app.route("/")
 def index():
     ensure_csv()
     return render_template("index.html")
 
 
-@app.route("/lookup", methods=["POST"])
 @app.route("/lookup", methods=["POST"])
 def api_lookup():
     data = request.json or {}
@@ -205,9 +209,9 @@ def api_recent():
             with open(CURRENT_CSV, "r", encoding="utf-8") as f:
                 reader = list(csv.reader(f))
                 if len(reader) > 1:
-                    last_rows = reader[1:][-5:]
-                    last_rows.reverse()
-                    return jsonify({"items": last_rows})
+                    all_rows = reader[1:]
+                    all_rows.reverse()
+                    return jsonify({"items": all_rows})
     except:
         pass
     return jsonify({"items": []})
@@ -370,4 +374,4 @@ def api_edit_row():
             return jsonify({"error": str(e)}), 500
 
 ensure_csv()
-app.run(host="0.0.0.0", port=5000, debug=True)
+app.run(host="0.0.0.0", port=5001, debug=True, ssl_context=("cert.pem", "key.pem"))
