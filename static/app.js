@@ -65,42 +65,64 @@ document.addEventListener('DOMContentLoaded', () => {
         cameraScanBtn.classList.add('scanning');
         isScanning = true;
 
-        // Create scanner instance
-        html5QrCode = new Html5Qrcode("camera-region");
+        // Create scanner instance with full barcode format support and hardware acceleration
+        const formatsToSupport = [
+            Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.ITF,
+            Html5QrcodeSupportedFormats.CODE_93,
+            Html5QrcodeSupportedFormats.CODABAR,
+            Html5QrcodeSupportedFormats.DATA_MATRIX
+        ];
+
+        html5QrCode = new Html5Qrcode("camera-region", {
+            formatsToSupport: formatsToSupport,
+            experimentalFeatures: {
+                useBarCodeDetectorIfSupported: true
+            },
+            verbose: false
+        });
 
         const config = {
-            fps: 15,
+            fps: 20,
             qrbox: function(viewfinderWidth, viewfinderHeight) {
-                // Adaptive scan region — large enough to be useful
+                // Generous square/adaptive box so QR codes and wide barcodes both fit
                 const minDim = Math.min(viewfinderWidth, viewfinderHeight);
-                const size = Math.floor(minDim * 0.75);
-                return { width: Math.max(size, 200), height: Math.max(Math.floor(size * 0.5), 100) };
+                const size = Math.floor(minDim * 0.85);
+                return { width: size, height: size };
             },
-            aspectRatio: 1.0,
-            formatsToSupport: [
-                Html5QrcodeSupportedFormats.QR_CODE,
-                Html5QrcodeSupportedFormats.CODE_128,
-                Html5QrcodeSupportedFormats.CODE_39,
-                Html5QrcodeSupportedFormats.EAN_13,
-                Html5QrcodeSupportedFormats.EAN_8,
-                Html5QrcodeSupportedFormats.UPC_A,
-                Html5QrcodeSupportedFormats.UPC_E,
-                Html5QrcodeSupportedFormats.ITF,
-                Html5QrcodeSupportedFormats.CODE_93,
-                Html5QrcodeSupportedFormats.CODABAR
-            ]
+            aspectRatio: 1.0
         };
 
-        // Prefer back camera on mobile
+        // Prefer back camera on mobile with continuous autofocus
         html5QrCode.start(
-            { facingMode: "environment" },
+            {
+                facingMode: "environment",
+                focusMode: "continuous",
+                width: { min: 640, ideal: 1280, max: 1920 },
+                height: { min: 480, ideal: 720, max: 1080 }
+            },
             config,
             onScanSuccess,
             onScanFailure
         ).catch(err => {
-            console.error("Camera start error:", err);
-            showToast("Camera access denied. Check permissions.", true);
-            stopCamera();
+            console.error("Camera start error, falling back to basic camera config:", err);
+            // Fallback in case device doesn't support width/focus constraints
+            html5QrCode.start(
+                { facingMode: "environment" },
+                config,
+                onScanSuccess,
+                onScanFailure
+            ).catch(err2 => {
+                console.error("Camera start fallback failed:", err2);
+                showToast("Camera access denied. Check permissions.", true);
+                stopCamera();
+            });
         });
     }
 
