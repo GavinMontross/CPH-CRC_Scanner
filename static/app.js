@@ -65,7 +65,7 @@ document.addEventListener('DOMContentLoaded', () => {
         cameraScanBtn.classList.add('scanning');
         isScanning = true;
 
-        // Create scanner instance with full barcode format support and hardware acceleration
+        // Create scanner instance with all standard barcode and QR formats
         const formatsToSupport = [
             Html5QrcodeSupportedFormats.QR_CODE,
             Html5QrcodeSupportedFormats.CODE_128,
@@ -82,47 +82,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
         html5QrCode = new Html5Qrcode("camera-region", {
             formatsToSupport: formatsToSupport,
-            experimentalFeatures: {
-                useBarCodeDetectorIfSupported: true
-            },
             verbose: false
         });
 
         const config = {
-            fps: 20,
+            fps: 15,
             qrbox: function(viewfinderWidth, viewfinderHeight) {
-                // Generous square/adaptive box so QR codes and wide barcodes both fit
                 const minDim = Math.min(viewfinderWidth, viewfinderHeight);
-                const size = Math.floor(minDim * 0.85);
+                const size = Math.floor(minDim * 0.8);
                 return { width: size, height: size };
             },
             aspectRatio: 1.0
         };
 
-        // Prefer back camera on mobile with continuous autofocus
+        // Standard facingMode: "environment" (guaranteed to work across all mobile browsers)
         html5QrCode.start(
-            {
-                facingMode: "environment",
-                focusMode: "continuous",
-                width: { min: 640, ideal: 1280, max: 1920 },
-                height: { min: 480, ideal: 720, max: 1080 }
-            },
+            { facingMode: "environment" },
             config,
             onScanSuccess,
             onScanFailure
         ).catch(err => {
-            console.error("Camera start error, falling back to basic camera config:", err);
-            // Fallback in case device doesn't support width/focus constraints
-            html5QrCode.start(
-                { facingMode: "environment" },
-                config,
-                onScanSuccess,
-                onScanFailure
-            ).catch(err2 => {
-                console.error("Camera start fallback failed:", err2);
-                showToast("Camera access denied. Check permissions.", true);
-                stopCamera();
-            });
+            console.error("Camera start error:", err);
+            showToast("Camera error: " + (err.name || err.message || "access denied"), true);
+            stopCamera();
         });
     }
 
