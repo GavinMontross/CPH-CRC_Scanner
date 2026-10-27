@@ -102,7 +102,7 @@ def get_redirect_uri():
     # Microsoft Entra ID strictly requires https:// for all non-localhost/non-127.0.0.1 addresses
     if proto == "http" and not (host.startswith("localhost") or host.startswith("127.0.0.1")):
         proto = "https"
-    path = os.getenv("SSO_REDIRECT_PATH", "/callback.php")
+    path = os.getenv("SSO_REDIRECT_PATH", "/auth/callback.php")
     return f"{proto}://{host}{path}"
 
 
@@ -394,9 +394,10 @@ def login():
     return redirect(f"{auth_url}?{urllib.parse.urlencode(params)}")
 
 
+@app.route("/auth/callback.php")
 @app.route("/auth/callback")
-@app.route("/callback")
 @app.route("/callback.php")
+@app.route("/callback")
 def auth_callback():
     error = request.args.get("error")
     error_desc = request.args.get("error_description")
