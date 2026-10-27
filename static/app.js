@@ -15,13 +15,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const detailsForm = document.getElementById('detailsForm');
     const recentTableBody = document.querySelector('#recentTable tbody');
     const fileListBody = document.getElementById('fileListBody');
-    const fileListBodyMobile = document.getElementById('fileListBodyMobile');
     const finalizeBtn = document.getElementById('finalizeBtn');
     const clearBtn = document.getElementById('clearBtn');
+    const clearFormBtn = document.getElementById('clearFormBtn');
     const cameraScanBtn = document.getElementById('cameraScanBtn');
     const cameraWrapper = document.getElementById('cameraWrapper');
     const cameraRegion = document.getElementById('camera-region');
     const batchCount = document.getElementById('batchCount');
+    const batchCountBadge = document.getElementById('batchCountBadge');
     const scanToast = document.getElementById('scanToast');
 
     let html5QrCode = null;
@@ -44,6 +45,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (closeCameraBtn) {
         closeCameraBtn.addEventListener('click', stopCamera);
+    }
+
+    if (clearFormBtn) {
+        clearFormBtn.addEventListener('click', () => {
+            scanInput.value = '';
+            document.getElementById('equipType').value = '';
+            document.getElementById('itemDesc').value = '';
+            document.getElementById('serialNum').value = '';
+            document.getElementById('templeTag').value = '';
+            statusBadge.className = 'status-pill';
+            statusBadge.innerText = 'Ready to Scan';
+            if (ocrCandidatesContainer) ocrCandidatesContainer.style.display = 'none';
+            showToast('Form cleared');
+        });
     }
 
     if (closeCandidatesBtn && ocrCandidatesContainer) {
@@ -287,7 +302,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function startCamera() {
-        if (cameraWrapper) cameraWrapper.style.display = 'block';
+        if (cameraWrapper) {
+            cameraWrapper.style.display = 'block';
+            cameraWrapper.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
         cameraRegion.style.display = 'block';
         cameraScanBtn.textContent = '⏹ Stop Camera';
         cameraScanBtn.classList.add('scanning');
@@ -526,7 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // LOOKUP (shared by camera and manual)
     // ========================
     async function performLookup(term) {
-        statusBadge.className = 'badge bg-warning text-dark';
+        statusBadge.className = 'status-pill bg-warning text-dark';
         statusBadge.innerText = 'Searching Snipe...';
 
         try {
@@ -548,10 +566,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Status
             if (data.found_in_snipe) {
-                statusBadge.className = 'badge bg-success';
+                statusBadge.className = 'status-pill bg-success text-white';
                 statusBadge.innerText = '✓ Found in Snipe-IT';
             } else {
-                statusBadge.className = 'badge bg-danger';
+                statusBadge.className = 'status-pill bg-danger text-white';
                 statusBadge.innerText = '✗ Not Found - Verify Info';
             }
 
@@ -787,6 +805,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (batchCount) {
                 batchCount.textContent = count > 0 ? `${count} item${count !== 1 ? 's' : ''} scanned` : 'No items yet';
             }
+            const batchCountBadge = document.getElementById('batchCountBadge');
+            if (batchCountBadge) {
+                batchCountBadge.textContent = count === 1 ? '1 item' : `${count} items`;
+            }
             const batchTabBadge = document.getElementById('batchTabBadge');
             if (batchTabBadge) {
                 batchTabBadge.textContent = count;
@@ -847,27 +869,27 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('completed_files');
             const data = await res.json();
 
-            // Populate completed files list
-            [fileListBody, fileListBodyMobile].forEach(tbody => {
-                if (!tbody) return;
-                tbody.innerHTML = '';
+            if (fileListBody) {
+                fileListBody.innerHTML = '';
 
                 if (!data.files || data.files.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="2" class="text-center text-muted py-4"><span style="font-size:1.6rem; display:block; margin-bottom:4px;">📁</span>No completed batches yet. Finish a batch to generate an Excel file.</td></tr>`;
+                    fileListBody.innerHTML = `<tr><td colspan="2" class="text-center text-muted py-4"><span style="font-size:1.6rem; display:block; margin-bottom:4px;">📁</span>No completed batches yet. Finish a batch to generate an Excel file.</td></tr>`;
                     return;
                 }
 
                 data.files.forEach(f => {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td class="small fw-semibold text-truncate" style="max-width: 220px;" title="${escapeHtml(f)}">📄 ${escapeHtml(f)}</td>
+                        <td class="small fw-semibold text-truncate" style="max-width: 240px;" title="${escapeHtml(f)}">
+                            <span class="me-1">📊</span> ${escapeHtml(f)}
+                        </td>
                         <td class="text-end text-nowrap">
-                            <a href="/download/${encodeURIComponent(f)}" class="btn btn-sm btn-outline-temple rounded-pill fw-semibold">⬇️ Download</a>
+                            <a href="/download/${encodeURIComponent(f)}" class="btn btn-sm btn-outline-danger rounded-pill fw-semibold px-3">⬇️ Download</a>
                         </td>
                     `;
-                    tbody.appendChild(tr);
+                    fileListBody.appendChild(tr);
                 });
-            });
+            }
         } catch (err) {
             console.error("Error loading files:", err);
         }

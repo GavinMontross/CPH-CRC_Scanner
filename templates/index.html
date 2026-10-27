@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="CRC Scanner">
-    <title>CRC Scanner | CPH</title>
+    <title>CRC Scanner | CPH Temple</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="icon" href="/images/templelogo.png" type="image/png">
     <link rel="apple-touch-icon" href="/images/templelogo.png">
@@ -19,11 +19,13 @@
         :root {
             --temple-cherry: #9D2235;
             --temple-dark: #7b1b2a;
-            --temple-light: #fbf1f2;
-            --bg-canvas: #f6f8fa;
+            --temple-light: #fdf2f4;
+            --temple-light-border: #fecdd3;
+            --bg-canvas: #f8fafc;
             --card-border: #e2e8f0;
             --text-main: #0f172a;
             --text-muted: #64748b;
+            --card-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
         }
 
         * {
@@ -38,12 +40,13 @@
             padding: 0;
             margin: 0;
             -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
         }
 
         .app-container {
-            max-width: 980px;
+            max-width: 1200px;
             margin: 0 auto;
-            padding: 1rem;
+            padding: 1.25rem 1rem 2rem;
         }
 
         /* --- Brand Bar --- */
@@ -51,36 +54,71 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0.5rem 0 0.85rem;
-            border-bottom: 2px solid #e2e8f0;
-            margin-bottom: 1rem;
+            padding: 0.5rem 0 1rem;
+            border-bottom: 1.5px solid var(--card-border);
+            margin-bottom: 1.25rem;
         }
 
         .brand-title {
             color: var(--temple-cherry);
             font-weight: 800;
-            font-size: 1.25rem;
-            letter-spacing: -0.2px;
+            font-size: 1.3rem;
+            letter-spacing: -0.3px;
             line-height: 1.1;
             margin: 0;
         }
 
         .brand-sub {
-            font-size: 0.72rem;
+            font-size: 0.74rem;
             font-weight: 600;
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 0.6px;
         }
 
-        /* --- Cards --- */
+        .user-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #ffffff;
+            padding: 4px 12px 4px 6px;
+            border-radius: 30px;
+            border: 1px solid var(--card-border);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #334155;
+        }
+
+        .user-avatar {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        /* --- Cards & Headers --- */
         .scanner-box {
             background: #ffffff;
-            border-radius: 16px;
+            border-radius: 18px;
             border: 1px solid var(--card-border);
-            box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
+            box-shadow: var(--card-shadow);
             padding: 1.25rem;
-            margin-bottom: 1.25rem;
+            transition: box-shadow 0.2s ease;
+        }
+
+        .card-heading {
+            font-size: 1.1rem;
+            font-weight: 750;
+            color: #0f172a;
+            letter-spacing: -0.2px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-heading .header-icon {
+            font-size: 1.25rem;
         }
 
         /* --- iOS Segmented Control (Mode Switcher) --- */
@@ -127,37 +165,36 @@
         /* --- Scan Action Buttons --- */
         .scan-btn-group {
             display: flex;
-            gap: 0.6rem;
-            margin-bottom: 0.85rem;
+            gap: 0.65rem;
         }
 
         .scan-btn-group .btn {
             border-radius: 12px;
-            font-weight: 600;
+            font-weight: 650;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 8px;
             min-height: 48px;
-            font-size: 0.95rem;
+            font-size: 0.92rem;
             transition: transform 0.1s ease, box-shadow 0.2s;
         }
 
         .scan-btn-group .btn:active {
-            transform: scale(0.98);
+            transform: scale(0.97);
         }
 
         .btn-hero-camera {
-            flex: 1.2;
+            flex: 1.25;
             background: linear-gradient(135deg, var(--temple-cherry) 0%, var(--temple-dark) 100%);
-            color: white;
+            color: white !important;
             border: none;
-            box-shadow: 0 4px 14px rgba(157, 34, 53, 0.28);
+            box-shadow: 0 4px 14px rgba(157, 34, 53, 0.26);
         }
 
-        .btn-hero-camera:hover, .btn-hero-camera:focus {
+        .btn-hero-camera:hover {
+            opacity: 0.96;
             color: white;
-            opacity: 0.95;
         }
 
         .btn-hero-camera.scanning {
@@ -170,7 +207,7 @@
             background: #ffffff;
             border: 1.5px solid #cbd5e1;
             color: #1e293b;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
         }
 
         .btn-hero-photo:hover {
@@ -183,22 +220,21 @@
             50% { opacity: 0.75; }
         }
 
-        /* --- Camera Viewfinder Container & HUD --- */
+        /* --- Camera Viewfinder & Floating Shutter HUD --- */
         .camera-wrapper {
             position: relative;
             width: 100%;
             border-radius: 16px;
             overflow: hidden;
             background: #000;
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
-            margin-bottom: 0.85rem;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
         }
 
         #camera-region {
             position: relative;
             width: 100%;
-            max-height: 38vh;
-            min-height: 220px;
+            height: 290px;
+            max-height: 42vh;
             overflow: hidden;
             background: #000;
         }
@@ -206,7 +242,7 @@
         #camera-region video {
             width: 100% !important;
             height: 100% !important;
-            max-height: 38vh !important;
+            max-height: 42vh !important;
             object-fit: cover !important;
             border-radius: 16px;
         }
@@ -217,18 +253,18 @@
             top: 12px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.72);
+            background: rgba(0, 0, 0, 0.75);
             color: #fff;
-            font-size: 0.75rem;
-            font-weight: 600;
+            font-size: 0.76rem;
+            font-weight: 650;
             padding: 5px 14px;
             border-radius: 20px;
             z-index: 25;
             white-space: nowrap;
             pointer-events: none;
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
         }
 
@@ -239,28 +275,28 @@
             right: 10px;
             z-index: 26;
             background: rgba(0, 0, 0, 0.65);
-            border: 1px solid rgba(255, 255, 255, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.3);
             color: #ffffff;
-            width: 32px;
-            height: 32px;
+            width: 36px;
+            height: 36px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 13px;
+            font-size: 15px;
             font-weight: 700;
             cursor: pointer;
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             transition: all 0.15s ease;
         }
 
         .camera-close-btn:active {
             transform: scale(0.9);
-            background: rgba(255, 255, 255, 0.25);
+            background: rgba(255, 255, 255, 0.3);
         }
 
-        /* Modern Lens Corner Brackets */
+        /* Reticle with Corner Brackets */
         .ocr-reticle {
             position: absolute;
             top: 14%;
@@ -273,34 +309,34 @@
             align-items: center;
             justify-content: center;
             border-radius: 12px;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35); /* Focus dark vignette */
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.38);
         }
 
         .ocr-reticle .bracket {
             position: absolute;
-            width: 22px;
-            height: 22px;
+            width: 24px;
+            height: 24px;
             border-color: #ffffff;
             border-style: solid;
         }
 
-        .ocr-reticle .bracket-tl { top: 0; left: 0; border-width: 3px 0 0 3px; border-top-left-radius: 8px; }
-        .ocr-reticle .bracket-tr { top: 0; right: 0; border-width: 3px 3px 0 0; border-top-right-radius: 8px; }
-        .ocr-reticle .bracket-bl { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-bottom-left-radius: 8px; }
-        .ocr-reticle .bracket-br { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-bottom-right-radius: 8px; }
+        .ocr-reticle .bracket-tl { top: 0; left: 0; border-width: 3.5px 0 0 3.5px; border-top-left-radius: 8px; }
+        .ocr-reticle .bracket-tr { top: 0; right: 0; border-width: 3.5px 3.5px 0 0; border-top-right-radius: 8px; }
+        .ocr-reticle .bracket-bl { bottom: 0; left: 0; border-width: 0 0 3.5px 3.5px; border-bottom-left-radius: 8px; }
+        .ocr-reticle .bracket-br { bottom: 0; right: 0; border-width: 0 3.5px 3.5px 0; border-bottom-right-radius: 8px; }
 
         .ocr-reticle-label {
-            background: rgba(0, 0, 0, 0.75);
+            background: rgba(0, 0, 0, 0.78);
             color: #ffffff;
             font-size: 0.72rem;
             font-weight: 700;
-            padding: 3px 10px;
+            padding: 4px 12px;
             border-radius: 6px;
             text-transform: uppercase;
             letter-spacing: 0.6px;
             border: 1px solid rgba(255, 255, 255, 0.25);
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
         }
 
         /* Floating Shutter HUD at Bottom of Viewfinder */
@@ -312,10 +348,10 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 12px;
+            gap: 14px;
             z-index: 25;
             pointer-events: none;
-            padding: 0 12px;
+            padding: 0 14px;
         }
 
         .camera-floating-controls button {
@@ -325,12 +361,12 @@
         .btn-shutter {
             background: linear-gradient(135deg, var(--temple-cherry) 0%, var(--temple-dark) 100%) !important;
             color: #ffffff !important;
-            border: 2px solid rgba(255, 255, 255, 0.95) !important;
-            font-size: 1rem !important;
-            font-weight: 700 !important;
-            padding: 0.6rem 1.4rem !important;
+            border: 2.5px solid rgba(255, 255, 255, 0.95) !important;
+            font-size: 0.95rem !important;
+            font-weight: 750 !important;
+            padding: 0.65rem 1.6rem !important;
             border-radius: 50px !important;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.55) !important;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -343,15 +379,15 @@
         }
 
         .btn-hud {
-            background: rgba(0, 0, 0, 0.68) !important;
+            background: rgba(0, 0, 0, 0.7) !important;
             color: #ffffff !important;
             border: 1px solid rgba(255, 255, 255, 0.3) !important;
             font-weight: 600 !important;
-            font-size: 0.8rem !important;
-            padding: 0.45rem 0.85rem !important;
+            font-size: 0.82rem !important;
+            padding: 0.5rem 0.9rem !important;
             border-radius: 50px !important;
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
             transition: all 0.15s ease;
         }
@@ -360,7 +396,7 @@
             background: #f59e0b !important;
             color: #000000 !important;
             border-color: #f59e0b !important;
-            font-weight: 700 !important;
+            font-weight: 750 !important;
         }
 
         /* --- Modern Form Inputs --- */
@@ -397,6 +433,10 @@
             margin-bottom: 2px;
         }
 
+        .form-card-label-required {
+            color: var(--temple-cherry);
+        }
+
         .form-card-input {
             width: 100%;
             border: none;
@@ -423,10 +463,16 @@
             box-shadow: 0 0 0 3px rgba(157, 34, 53, 0.12);
         }
 
+        .search-icon {
+            padding-left: 0.85rem;
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+
         .search-pill input {
             border: none;
             outline: none;
-            padding: 0.55rem 0.85rem;
+            padding: 0.55rem 0.75rem;
             font-size: 16px !important;
             flex: 1;
             background: transparent;
@@ -436,13 +482,18 @@
             border: none;
             background: var(--temple-cherry);
             color: white;
-            font-weight: 600;
+            font-weight: 650;
             padding: 0.55rem 1.25rem;
             transition: background-color 0.15s ease;
         }
 
         .search-pill button:active {
             background: var(--temple-dark);
+        }
+
+        .apple-tip-bar {
+            font-size: 0.74rem;
+            color: #64748b;
         }
 
         /* --- Status Bar & Actions --- */
@@ -462,29 +513,34 @@
             font-weight: 600;
             padding: 0.4rem 0.75rem;
             border-radius: 20px;
+            transition: all 0.2s ease;
         }
 
         .btn-temple {
             background-color: var(--temple-cherry);
             border-color: var(--temple-cherry);
-            color: white;
-            font-weight: 600;
-            border-radius: 10px;
+            color: white !important;
+            font-weight: 650;
+            border-radius: 12px;
+            transition: transform 0.1s ease, background-color 0.15s ease;
         }
 
-        .btn-temple:hover, .btn-temple:active {
+        .btn-temple:hover {
             background-color: var(--temple-dark) !important;
             border-color: var(--temple-dark) !important;
-            color: white !important;
         }
 
-        /* --- Toast Notification --- */
+        .btn-temple:active {
+            transform: scale(0.97);
+        }
+
+        /* --- Toast Notification (Dynamic Island Style) --- */
         .scan-toast {
             position: fixed;
             top: calc(env(safe-area-inset-top, 12px) + 12px);
             left: 50%;
-            transform: translateX(-50%);
-            background: #0f172a;
+            transform: translateX(-50%) translateY(-10px);
+            background: rgba(15, 23, 42, 0.94);
             color: white;
             padding: 0.65rem 1.4rem;
             border-radius: 30px;
@@ -492,18 +548,22 @@
             font-size: 0.88rem;
             z-index: 9999;
             opacity: 0;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-            transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: opacity 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
             pointer-events: none;
             white-space: nowrap;
         }
 
         .scan-toast.show {
             opacity: 1;
+            transform: translateX(-50%) translateY(0);
         }
 
         .scan-toast.error {
-            background: #dc2626;
+            background: rgba(220, 38, 38, 0.95);
         }
 
         .scan-flash {
@@ -515,10 +575,10 @@
             100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
         }
 
-        /* --- Mobile vs Desktop Layout --- */
+        /* --- Batch Table / Mobile Card Layout --- */
         @media (max-width: 767px) {
             .app-container {
-                padding: 0.75rem 0.75rem calc(env(safe-area-inset-bottom, 16px) + 75px);
+                padding: 0.75rem 0.75rem calc(env(safe-area-inset-bottom, 16px) + 72px);
             }
 
             .tab-content-section {
@@ -529,7 +589,7 @@
                 display: block;
             }
 
-            /* --- Fixed Bottom Tab Bar (iOS Native Style) --- */
+            /* Fixed Bottom Tab Bar (iOS Native Style) */
             .mobile-tabs {
                 position: fixed;
                 bottom: 0;
@@ -537,7 +597,7 @@
                 right: 0;
                 z-index: 1050;
                 display: flex;
-                background: rgba(255, 255, 255, 0.94);
+                background: rgba(255, 255, 255, 0.92);
                 backdrop-filter: blur(20px);
                 -webkit-backdrop-filter: blur(20px);
                 border-top: 1px solid rgba(0, 0, 0, 0.08);
@@ -554,7 +614,7 @@
                 justify-content: center;
                 background: transparent;
                 border: none;
-                padding: 6px 2px;
+                padding: 5px 2px;
                 border-radius: 12px;
                 font-size: 0.72rem;
                 font-weight: 600;
@@ -590,7 +650,7 @@
                 text-align: center;
             }
 
-            /* --- Card Layout for Batch Table on Mobile --- */
+            /* Card Layout for Batch Table on Mobile */
             #recentTable thead {
                 display: none;
             }
@@ -604,14 +664,14 @@
                 background: #ffffff;
                 border: 1.5px solid #e2e8f0;
                 border-radius: 14px;
-                padding: 0.85rem 1rem;
+                padding: 0.9rem 1rem;
                 margin-bottom: 0.75rem;
-                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
                 position: relative;
             }
 
             #recentTable td {
-                padding: 0.1rem 0;
+                padding: 0.15rem 0;
                 border: none;
             }
 
@@ -624,9 +684,9 @@
             }
 
             #recentTable td:nth-child(2) {
-                font-size: 0.95rem;
-                font-weight: 600;
-                color: #1e293b;
+                font-size: 1rem;
+                font-weight: 650;
+                color: #0f172a;
                 margin-top: 1px;
             }
 
@@ -637,15 +697,27 @@
                 color: #0f172a;
                 background: #f1f5f9;
                 display: inline-block;
-                padding: 2px 8px;
-                border-radius: 6px;
-                margin-top: 5px;
+                padding: 3px 10px;
+                border-radius: 8px;
+                margin-top: 6px;
+                border: 1px solid #e2e8f0;
             }
 
             #recentTable td:nth-child(4) {
-                font-size: 0.82rem;
-                color: #64748b;
-                margin-top: 4px;
+                display: inline-block;
+                margin-left: 6px;
+                margin-top: 6px;
+                font-size: 0.85rem;
+                font-weight: 600;
+                color: var(--temple-cherry);
+                background: var(--temple-light);
+                border: 1px solid var(--temple-light-border);
+                padding: 3px 8px;
+                border-radius: 8px;
+            }
+
+            #recentTable td:nth-child(4):empty {
+                display: none;
             }
 
             #recentTable td:nth-child(5) {
@@ -656,13 +728,14 @@
             }
 
             #recentTable td:nth-child(5) .btn {
-                min-height: 32px;
-                padding: 0.25rem 0.55rem;
+                min-height: 36px;
+                padding: 0.3rem 0.65rem;
                 border-radius: 8px;
+                font-size: 0.9rem;
             }
         }
 
-        /* Desktop keeps the 2-column layout */
+        /* --- Desktop View (Clean 2-Column Dashboard, No Redundancy) --- */
         @media (min-width: 768px) {
             .mobile-tabs {
                 display: none !important;
@@ -671,19 +744,23 @@
             .tab-content-section {
                 display: block !important;
             }
+
+            #recentTable tbody tr:hover {
+                background-color: #f8fafc;
+            }
         }
     </style>
 </head>
 
 <body>
-    <!-- Toast notification -->
+    <!-- Floating Toast Notification -->
     <div id="scanToast" class="scan-toast"></div>
 
     <div class="app-container">
         <!-- Top Brand Bar -->
-        <div class="brand-bar">
+        <header class="brand-bar">
             <div class="d-flex align-items-center gap-2">
-                <img src="/images/templelogo.png" alt="Temple Logo" style="height: 32px; width: auto;">
+                <img src="/images/templelogo.png" alt="Temple Logo" style="height: 34px; width: auto;">
                 <div>
                     <h1 class="brand-title">CPH CRC Scanner</h1>
                     <span class="brand-sub">Temple University</span>
@@ -691,32 +768,38 @@
             </div>
             {% if user %}
             <div class="d-flex align-items-center gap-2">
-                <div class="d-flex align-items-center gap-2 bg-white px-2 py-1 rounded-pill border shadow-sm">
+                <div class="user-pill">
                     {% if user.photo %}
-                    <img src="data:image/jpeg;base64,{{ user.photo }}" alt="User Photo" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">
+                    <img src="data:image/jpeg;base64,{{ user.photo }}" alt="User Photo" class="user-avatar">
                     {% else %}
-                    <span style="font-size: 0.9rem;">👤</span>
+                    <span style="font-size: 0.95rem;">👤</span>
                     {% endif %}
-                    <span class="small fw-semibold text-truncate d-none d-sm-inline" style="max-width: 140px;" title="{{ user.email }}">{{ user.name }}</span>
+                    <span class="text-truncate d-none d-sm-inline" style="max-width: 140px;" title="{{ user.email }}">{{ user.name }}</span>
                 </div>
-                <a href="/logout" class="btn btn-outline-danger btn-sm rounded-pill" title="Sign out">Sign Out</a>
+                <a href="/logout" class="btn btn-outline-danger btn-sm rounded-pill px-3" title="Sign out">Sign Out</a>
             </div>
             {% endif %}
-        </div>
+        </header>
 
-        <div class="row">
-            <!-- Main Column -->
-            <div class="col-md-7">
-                <!-- SCANNER TAB -->
+        <!-- Main Responsive Grid: Left Column = Scanner, Right Column = Batch & Files -->
+        <div class="row g-3">
+            <!-- LEFT COLUMN: SCANNER TAB / CARD -->
+            <div class="col-lg-6 col-md-12">
                 <div class="tab-content-section active" id="scanner-tab">
                     <div class="scanner-box">
                         <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h5 class="m-0 text-dark fw-bold" style="font-size:1.05rem;">Scan Equipment</h5>
-                            <button id="finalizeBtn" class="btn btn-warning btn-sm fw-bold rounded-pill">Finish Batch</button>
+                            <h2 class="card-heading m-0">
+                                <span class="header-icon">📷</span>
+                                <span>Scan Equipment</span>
+                            </h2>
+                            <!-- Mobile-only finish batch shortcut -->
+                            <button type="button" class="btn btn-warning btn-sm fw-bold rounded-pill d-md-none" onclick="document.getElementById('finalizeBtn').click();">
+                                Finish Batch
+                            </button>
                         </div>
 
                         <!-- Scan Mode Switcher (iOS Segmented Control) -->
-                        <div class="segmented-control mb-3">
+                        <div class="segmented-control mb-3" role="radiogroup" aria-label="Scan Mode">
                             <input type="radio" name="scanMode" id="modeOcr" value="ocr" checked>
                             <label for="modeOcr">
                                 <span>📝</span> <span>Text Scan</span>
@@ -729,7 +812,7 @@
                         </div>
 
                         <!-- Camera Action Buttons -->
-                        <div class="scan-btn-group">
+                        <div class="scan-btn-group mb-3">
                             <button id="cameraScanBtn" class="btn btn-hero-camera">
                                 <span>📹</span> <span>Live Camera</span>
                             </button>
@@ -739,7 +822,7 @@
                             <input type="file" id="cameraPhotoInput" accept="image/*" style="display:none;">
                         </div>
 
-                        <!-- Camera Viewfinder & Floating Mobile Controls -->
+                        <!-- Live Camera Viewfinder & Floating Shutter HUD -->
                         <div class="camera-wrapper mb-3" id="cameraWrapper" style="display:none;">
                             <!-- Top Aiming Guide Badge -->
                             <div id="ocrAimGuide" class="camera-aim-badge" style="display:none;">
@@ -747,27 +830,28 @@
                             </div>
 
                             <!-- Quick Close Camera Button -->
-                            <button type="button" id="closeCameraBtn" class="camera-close-btn" title="Close Camera">✕</button>
+                            <button type="button" id="closeCameraBtn" class="camera-close-btn" title="Close Camera" aria-label="Close Camera">✕</button>
 
-                            <!-- Live Camera Viewfinder -->
+                            <!-- Live Camera Stream -->
                             <div id="camera-region"></div>
 
                             <!-- Floating Controls pinned inside viewfinder at bottom -->
                             <div id="cameraControls" class="camera-floating-controls" style="display:none;">
-                                <button type="button" id="zoomBtn" class="btn btn-hud" style="display:none;">🔍 2x</button>
-                                <button type="button" id="ocrCaptureBtn" class="btn btn-shutter shadow">📸 Read Text</button>
-                                <button type="button" id="torchBtn" class="btn btn-hud" style="display:none;">🔦 Light</button>
+                                <button type="button" id="zoomBtn" class="btn btn-hud" style="display:none;" title="Toggle Zoom">🔍 2x</button>
+                                <button type="button" id="ocrCaptureBtn" class="btn btn-shutter shadow" title="Capture and OCR">📸 Read Text</button>
+                                <button type="button" id="torchBtn" class="btn btn-hud" style="display:none;" title="Toggle Torch">🔦 Light</button>
                             </div>
                         </div>
 
-                        <!-- Manual input fallback -->
+                        <!-- Manual Input Bar -->
                         <div class="mb-2">
                             <div class="search-pill">
+                                <span class="search-icon">🔍</span>
                                 <input type="text" id="scanInput" placeholder="Type or paste Serial or Tag..."
                                     autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
                                 <button type="button" id="manualLookupBtn">Go</button>
                             </div>
-                            <div class="text-muted mt-1 px-1 d-flex align-items-center gap-1" style="font-size:0.75rem;">
+                            <div class="apple-tip-bar mt-1 px-1 d-flex align-items-center gap-1">
                                 <span>💡</span>
                                 <span><strong>iPhone Tip:</strong> Tap any field and select <em>"Scan Text"</em> to insert with Apple Camera.</span>
                             </div>
@@ -782,25 +866,36 @@
                             <div id="ocrCandidatesList" class="d-flex flex-wrap gap-1"></div>
                         </div>
 
-                        <!-- Details form -->
+                        <!-- Equipment Details Form -->
                         <form id="detailsForm">
                             <div class="row g-2 mb-2">
                                 <div class="col-6">
                                     <div class="form-card">
                                         <label class="form-card-label" for="equipType">Equipment Type</label>
-                                        <input type="text" id="equipType" class="form-card-input" placeholder="e.g. Computer">
+                                        <input type="text" id="equipType" list="equipTypeList" class="form-card-input" placeholder="e.g. Computer">
+                                        <datalist id="equipTypeList">
+                                            <option value="Computer">
+                                            <option value="Laptop">
+                                            <option value="Monitor">
+                                            <option value="Docking Station">
+                                            <option value="Printer">
+                                            <option value="Tablet">
+                                            <option value="Server">
+                                            <option value="Phone">
+                                            <option value="Other">
+                                        </datalist>
                                     </div>
                                 </div>
                                 <div class="col-6">
                                     <div class="form-card">
                                         <label class="form-card-label" for="itemDesc">Item Description</label>
-                                        <input type="text" id="itemDesc" class="form-card-input" placeholder="e.g. Dell Optiplex">
+                                        <input type="text" id="itemDesc" class="form-card-input" placeholder="e.g. Dell OptiPlex">
                                     </div>
                                 </div>
                                 <div class="col-6">
                                     <div class="form-card highlight-field">
-                                        <label class="form-card-label" style="color:var(--temple-cherry);" for="serialNum">Serial Number *</label>
-                                        <input type="text" id="serialNum" class="form-card-input fw-bold" placeholder="Required">
+                                        <label class="form-card-label form-card-label-required" for="serialNum">Serial Number *</label>
+                                        <input type="text" id="serialNum" class="form-card-input fw-bold font-monospace" placeholder="Required" required>
                                     </div>
                                 </div>
                                 <div class="col-6">
@@ -814,24 +909,35 @@
                             <div class="status-bar mt-3">
                                 <span id="statusBadge" class="status-pill">Ready to Scan</span>
                                 <div class="d-flex gap-2">
-                                    <button type="button" id="clearBtn" class="btn btn-outline-danger btn-sm rounded-pill">Reset</button>
+                                    <button type="button" id="clearFormBtn" class="btn btn-outline-secondary btn-sm rounded-pill px-3">Clear Form</button>
                                     <button type="submit" id="saveBtn" class="btn btn-temple px-3 fw-bold shadow-sm">+ Add to Batch</button>
                                 </div>
                             </div>
                         </form>
                     </div>
                 </div>
+            </div>
 
-                <!-- BATCH TAB -->
+            <!-- RIGHT COLUMN: CURRENT BATCH + COMPLETED SCANS -->
+            <div class="col-lg-6 col-md-12">
+                <!-- BATCH TAB / CARD -->
                 <div class="tab-content-section" id="batch-tab">
-                    <div class="scanner-box pt-3">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <div>
-                                <h5 class="m-0 text-dark fw-bold" style="font-size:1.05rem;">Current Batch</h5>
-                                <div id="batchCount" class="text-muted small"></div>
+                    <div class="scanner-box mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <h2 class="card-heading m-0">
+                                    <span class="header-icon">📋</span>
+                                    <span>Current Batch</span>
+                                </h2>
+                                <span id="batchCountBadge" class="badge rounded-pill bg-light text-dark border">0 items</span>
                             </div>
-                            <button class="btn btn-warning btn-sm fw-bold rounded-pill" onclick="document.getElementById('finalizeBtn').click();">Finish Batch</button>
+                            <div class="d-flex align-items-center gap-2">
+                                <button type="button" id="clearBtn" class="btn btn-outline-danger btn-sm rounded-pill" title="Discard this batch">Reset</button>
+                                <button type="button" id="finalizeBtn" class="btn btn-warning btn-sm fw-bold rounded-pill shadow-sm">Finish Batch</button>
+                            </div>
                         </div>
+
+                        <!-- Scanned Items Table (Mobile transforms into clean cards via CSS) -->
                         <div class="table-responsive">
                             <table class="table table-hover align-middle mb-0" id="recentTable">
                                 <thead class="table-light">
@@ -848,20 +954,23 @@
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Files Section (Right Column on Desktop, Files Tab on Mobile) -->
-            <div class="col-md-5 tab-content-section" id="files-tab">
-                <div class="scanner-box">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <h5 class="m-0 text-dark fw-bold" style="font-size:1.05rem;">Completed Scans</h5>
-                        <button type="button" id="refreshFilesBtn" class="btn btn-sm btn-outline-secondary rounded-pill" title="Refresh files list">🔄 Refresh</button>
-                    </div>
-                    <p class="text-muted small mb-3">Download completed batch Excel files to submit to CRC.</p>
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <tbody id="fileListBody"></tbody>
-                        </table>
+                <!-- COMPLETED SCANS TAB / CARD -->
+                <div class="tab-content-section" id="files-tab">
+                    <div class="scanner-box">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h2 class="card-heading m-0">
+                                <span class="header-icon">📁</span>
+                                <span>Completed Scans</span>
+                            </h2>
+                            <button type="button" id="refreshFilesBtn" class="btn btn-sm btn-outline-secondary rounded-pill" title="Refresh files list">🔄 Refresh</button>
+                        </div>
+                        <p class="text-muted small mb-3">Download finalized batch Excel files to submit to CRC.</p>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <tbody id="fileListBody"></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -897,11 +1006,11 @@
                     <input type="hidden" id="editOldSerial">
                     <div class="mb-2">
                         <label class="form-label small text-muted fw-bold">Equipment Type</label>
-                        <input type="text" id="editEquipType" class="form-control rounded-3" placeholder="e.g. Computer">
+                        <input type="text" id="editEquipType" list="equipTypeList" class="form-control rounded-3" placeholder="e.g. Computer">
                     </div>
                     <div class="mb-2">
                         <label class="form-label small text-muted fw-bold">Item Description</label>
-                        <input type="text" id="editItemDesc" class="form-control rounded-3" placeholder="e.g. Dell Optiplex">
+                        <input type="text" id="editItemDesc" class="form-control rounded-3" placeholder="e.g. Dell OptiPlex">
                     </div>
                     <div class="mb-2">
                         <label class="form-label small text-muted fw-bold">Serial Number *</label>
