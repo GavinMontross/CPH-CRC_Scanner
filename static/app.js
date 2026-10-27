@@ -77,12 +77,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const file = inputEl.files && inputEl.files[0];
         if (!file) return;
 
-        showToast("📸 Processing photo with OCR & Barcode engine...");
+        showToast("📸 Reading barcode from photo...");
 
         if (takePhotoBtn) {
             takePhotoBtn.disabled = true;
-            if (takePhotoTitle) takePhotoTitle.textContent = "Analyzing Photo...";
-            if (takePhotoSub) takePhotoSub.textContent = "Extracting barcodes, serial numbers & tags";
+            if (takePhotoTitle) takePhotoTitle.textContent = "Scanning Barcode...";
+            if (takePhotoSub) takePhotoSub.textContent = "Decoding barcode serial & matching in Snipe-IT";
         }
         if (photoStatusBadge) {
             photoStatusBadge.style.display = 'inline';
@@ -112,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (takePhotoBtn) {
                 takePhotoBtn.disabled = false;
                 if (takePhotoTitle) takePhotoTitle.textContent = "Take Photo to Scan";
-                if (takePhotoSub) takePhotoSub.textContent = "Tap to open camera • Reads barcodes & serial text";
+                if (takePhotoSub) takePhotoSub.textContent = "Tap to open camera • Reads barcode serials";
             }
             if (photoStatusBadge) {
                 photoStatusBadge.style.display = 'none';
@@ -122,17 +122,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function processOcrResult(data) {
         if (!data || !data.success) {
-            showToast(data?.error || "No barcode or serial found. Try closer or brighter light.", true);
+            showToast(data?.error || "No barcode found. Please ensure barcode is clear and in focus.", true);
             return;
         }
 
         if (data.primary) {
             if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
-            showToast("✓ Detected: " + data.primary);
+            showToast("✓ Barcode: " + data.primary);
             scanInput.value = data.primary;
             performLookup(data.primary);
         } else {
-            showToast("No equipment tag detected in image. Try again.", true);
+            showToast("No barcode detected in photo. Try again.", true);
         }
 
         renderCandidates(data.candidates || []);

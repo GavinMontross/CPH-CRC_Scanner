@@ -772,26 +772,18 @@ def parse_equipment_text(raw_text):
 
 @app.route("/ocr", methods=["POST"])
 def api_ocr():
-    if not OCR_AVAILABLE and not BARCODE_AVAILABLE and not ZXING_AVAILABLE:
+    if not BARCODE_AVAILABLE and not ZXING_AVAILABLE:
         return jsonify({
-            "error": "Image scanning engine (zxing/pyzbar/pytesseract) is not installed on this server.",
+            "error": "Barcode scanning engine (zxing-cpp) is not installed on this server.",
             "success": False
         }), 500
 
     img_data = None
-    crop_info = None
 
     if "file" in request.files:
         img_data = request.files["file"].read()
-        crop_raw = request.form.get("crop")
-        if crop_raw:
-            try:
-                crop_info = json.loads(crop_raw)
-            except:
-                pass
     elif request.is_json and "image" in request.json:
         raw_b64 = request.json["image"]
-        crop_info = request.json.get("crop")
         if "," in raw_b64:
             raw_b64 = raw_b64.split(",", 1)[1]
         try:
@@ -808,20 +800,11 @@ def api_ocr():
         image = Image.open(io.BytesIO(img_data))
         image = ImageOps.exif_transpose(image)
 
-        # Optional crop to focused camera viewfinder region
-        if crop_info and isinstance(crop_info, dict):
-            w, h = image.size
-            if crop_info.get("normalized", False):
-                left = int(crop_info.get("x", 0) * w)
-                top = int(crop_info.get("y", 0) * h)
-                right = int((crop_info.get("x", 0) + crop_info.get("width", 1)) * w)
-                bottom = int((crop_info.get("y", 0) + crop_info.get("height", 1)) * h)
-            else:
-                left = int(crop_info.get("x", 0))
-                top = int(crop_info.get("y", 0))
-                right = left + int(crop_info.get("width", w))
-                bottom = top + int(crop_info.get("height", h))
-            image = image.crop((max(0, left), max(0, top), min(w, right), min(h, bottom)))
+        # Clamped scaling for barcode detection: clamp max dimension to 2400px
+        w, h = image.size
+        if w > 2400 or h > 2400:
+            scale = 2200.0 / max(w, h)
+            image = image.resize((int(w * scale), int(h * scale)), Image.Resampling.LANCZOS)
 
         candidates = []
         seen = set()
@@ -842,128 +825,110 @@ def api_ocr():
                 "verified": is_verified
             })
 
-        # --- STEP 1: High-Precision Barcode Decoding (zxing-cpp + pyzbar) ---
+        def parse_barcode_result(raw_text, b_type):
+            raw_data = (raw_text or "").strip()
+            if not raw_data:
+                return False
+
+            # Check if 2D barcode contains a Lenovo or Dell support URL with serial embedded
+            lower_raw = raw_data.lower()
+            if "lenovo.com" in lower_raw or "pcsupport" in lower_raw:
+                parts = [p for p in raw_data.split('?')[0].split('#')[0].split('/') if p]
+                if parts:
+                    last_seg = parts[-1].strip().upper()
+                    if 6 <= len(last_seg) <= 12 and re.match(r'^[A-Z0-9]+$', last_seg):
+                        register_candidate(last_seg, f"Barcode Serial ({b_type})", 100)
+                        return True
+
+            clean_b = re.sub(r'[^A-Za-z0-9]', '', raw_data).upper()
+            if not clean_b:
+                return False
+
+            # Lenovo 1S barcode format: 1S + 4-char machine type + 8-char serial (e.g. 1S20VFPC1QLZMC)
+            if clean_b.startswith("1S") and len(clean_b) >= 14:
+                serial_part = clean_b[-8:]
+                type_part = clean_b[2:-8]
+                register_candidate(serial_part, f"Barcode Serial ({b_type})", 100, is_verified=True)
+                if len(type_part) >= 4:
+                    fmt_type = f"{type_part[:4]}-{type_part[4:]}" if len(type_part) == 10 else type_part
+                    register_candidate(fmt_type, f"Barcode Model ({b_type})", 80)
+                return True
+
+            # Temple Asset Tag barcode (TU12345 or 5-7 digits)
+            if clean_b.startswith("TU") or (clean_b.isdigit() and len(clean_b) in (5, 6, 7)):
+                register_candidate(clean_b, f"Barcode Tag ({b_type})", 100, is_verified=True)
+                return True
+
+            # General hardware serial barcode
+            if len(clean_b) >= 4:
+                register_candidate(clean_b, f"Barcode Serial ({b_type})", 95)
+                # If starts with 'S' prefix followed by 6-12 chars (common in HP/Dell barcodes)
+                if clean_b.startswith("S") and len(clean_b) >= 7 and not clean_b[1].isdigit():
+                    register_candidate(clean_b[1:], f"Barcode Serial ({b_type})", 92)
+                return True
+
+            return False
+
+        # --- STEP 1: Multi-Pass Barcode Decoding (zxing-cpp) ---
         barcode_found = False
         if ZXING_AVAILABLE:
+            # Pass A: Direct decode on original image
             try:
                 z_results = zxingcpp.read_barcodes(image)
                 for b in z_results:
-                    raw_data = (b.text or "").strip()
-                    clean_b = re.sub(r'[^A-Za-z0-9]', '', raw_data).upper()
-                    b_type = str(b.format).split(".")[-1]
-
-                    if clean_b.startswith("1S") and len(clean_b) >= 14:
-                        serial_part = clean_b[-8:]
-                        type_part = clean_b[2:-8]
-                        register_candidate(serial_part, f"Barcode Serial ({b_type})", 100, is_verified=True)
-                        if len(type_part) >= 4:
-                            fmt_type = f"{type_part[:4]}-{type_part[4:]}" if len(type_part) == 10 else type_part
-                            register_candidate(fmt_type, f"Barcode Model ({b_type})", 80)
-                        barcode_found = True
-                    elif clean_b.startswith("TU") or (clean_b.isdigit() and len(clean_b) in (5, 6, 7)):
-                        register_candidate(clean_b, f"Barcode Tag ({b_type})", 100, is_verified=True)
-                        barcode_found = True
-                    elif len(clean_b) >= 5:
-                        register_candidate(clean_b, f"Barcode ({b_type})", 98)
+                    if parse_barcode_result(b.text, str(b.format).split(".")[-1]):
                         barcode_found = True
             except Exception as z_err:
-                logging.warning(f"[OCR] zxing-cpp decode error: {z_err}")
+                logging.warning(f"[Barcode] zxing-cpp pass 1 error: {z_err}")
 
+            # Pass B: Contrast enhanced grayscale (helps with faint or glare-affected stickers)
+            if not barcode_found:
+                try:
+                    gray = image.convert("L")
+                    enhancer = ImageEnhance.Contrast(gray)
+                    boosted = enhancer.enhance(1.4)
+                    z_results = zxingcpp.read_barcodes(boosted)
+                    for b in z_results:
+                        if parse_barcode_result(b.text, str(b.format).split(".")[-1]):
+                            barcode_found = True
+                except Exception as e:
+                    logging.debug(f"[Barcode] zxing-cpp pass 2 error: {e}")
+
+            # Pass C: Inverted grayscale (for dark stickers with light barcode lines)
+            if not barcode_found:
+                try:
+                    gray = image.convert("L")
+                    inv = ImageOps.invert(gray)
+                    z_results = zxingcpp.read_barcodes(inv)
+                    for b in z_results:
+                        if parse_barcode_result(b.text, str(b.format).split(".")[-1]):
+                            barcode_found = True
+                except Exception as e:
+                    logging.debug(f"[Barcode] zxing-cpp pass 3 error: {e}")
+
+        # --- STEP 2: Pyzbar Fallback ---
         if not barcode_found and BARCODE_AVAILABLE:
             try:
                 barcodes = decode_barcode(image)
                 for b in barcodes:
                     raw_data = b.data.decode('utf-8', errors='replace').strip()
-                    clean_b = re.sub(r'[^A-Za-z0-9]', '', raw_data).upper()
-
-                    if clean_b.startswith("1S") and len(clean_b) >= 14:
-                        serial_part = clean_b[-8:]
-                        type_part = clean_b[2:-8]
-                        register_candidate(serial_part, f"Barcode Serial ({b.type})", 100, is_verified=True)
-                        if len(type_part) >= 4:
-                            fmt_type = f"{type_part[:4]}-{type_part[4:]}" if len(type_part) == 10 else type_part
-                            register_candidate(fmt_type, f"Barcode Model ({b.type})", 80)
-                    elif clean_b.startswith("TU") or (clean_b.isdigit() and len(clean_b) in (5, 6, 7)):
-                        register_candidate(clean_b, f"Barcode Tag ({b.type})", 100, is_verified=True)
-                    elif len(clean_b) >= 5:
-                        register_candidate(clean_b, f"Barcode ({b.type})", 98)
+                    if parse_barcode_result(raw_data, b.type):
+                        barcode_found = True
             except Exception as b_err:
-                logging.warning(f"[OCR] pyzbar decode error: {b_err}")
+                logging.warning(f"[Barcode] pyzbar decode error: {b_err}")
 
-        # --- STEP 2: Optimized Multi-Pass OCR with Safe Clamping & Polarity Detection ---
-        raw_text_parts = []
-        if OCR_AVAILABLE:
-            gray = image.convert("L")
-            w, h = gray.size
+        # Check if any barcodes were detected
+        if not candidates:
+            return jsonify({
+                "success": False,
+                "error": "No barcode detected in the photo. Please make sure the barcode or QR code is clear, well-lit, and in focus.",
+                "candidates": []
+            }), 200
 
-            # Clamped scaling: target 1600-2200px width. Never upscale an already large 4000px iPhone photo!
-            if w > 2400:
-                scale = 2000.0 / w
-            elif w < 1200:
-                scale = min(2.5, 1600.0 / max(w, 1))
-            else:
-                scale = 1.0
-
-            if scale != 1.0:
-                scaled_w, scaled_h = int(w * scale), int(h * scale)
-                processed_gray = gray.resize((scaled_w, scaled_h), Image.Resampling.LANCZOS)
-            else:
-                processed_gray = gray
-
-            # Polarity detection via mean luminance (dark sticker vs light sticker)
-            stat_lum = list(processed_gray.getdata())
-            mean_lum = sum(stat_lum) / len(stat_lum) if stat_lum else 128
-            is_dark_bg = mean_lum < 115
-
-            # Contrast normalization (no artificial edge-ringing SHARPEN)
-            enhancer = ImageEnhance.Contrast(processed_gray)
-            boosted_gray = enhancer.enhance(1.35)
-            boosted_inv = ImageOps.invert(boosted_gray)
-
-            # Determine primary vs secondary image based on sticker polarity
-            primary_img = boosted_inv if is_dark_bg else boosted_gray
-            secondary_img = boosted_gray if is_dark_bg else boosted_inv
-
-            tess_cfg_sparse = "--oem 3 --psm 11 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:/#."
-            tess_cfg_block = "--oem 3 --psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:/#."
-
-            # Pass 1: Primary polarity with sparse segmentation
-            try:
-                txt1 = pytesseract.image_to_string(primary_img, config=tess_cfg_sparse)
-                if txt1:
-                    raw_text_parts.append(txt1)
-            except Exception as e:
-                logging.debug(f"OCR Pass 1 error: {e}")
-
-            # Pass 2: Primary polarity with block segmentation
-            try:
-                txt2 = pytesseract.image_to_string(primary_img, config=tess_cfg_block)
-                if txt2:
-                    raw_text_parts.append(txt2)
-            except Exception as e:
-                logging.debug(f"OCR Pass 2 error: {e}")
-
-            # Pass 3: Secondary polarity fallback
-            try:
-                txt3 = pytesseract.image_to_string(secondary_img, config=tess_cfg_block)
-                if txt3:
-                    raw_text_parts.append(txt3)
-            except Exception as e:
-                logging.debug(f"OCR Pass 3 error: {e}")
-
-            combined_ocr_text = "\n".join(raw_text_parts)
-            ocr_res = parse_equipment_text(combined_ocr_text)
-
-            # Merge OCR candidates
-            for c in ocr_res["candidates"]:
-                register_candidate(c["value"], c["label"], c["confidence"])
-
-        # --- STEP 3: Snipe-IT Ground-Truth Validation Lever ---
-        # Validate candidates against Snipe-IT inventory ground truth
+        # --- STEP 3: Snipe-IT Ground-Truth Validation ---
         verified_primary = None
         if SNIPE_URL and SNIPE_TOKEN and candidates:
-            # Check the top 4 candidates against Snipe-IT
-            for cand in candidates[:4]:
+            for cand in candidates[:5]:
                 snipe_match = lookup_snipe(cand["value"])
                 if snipe_match and snipe_match.get("Serial Number"):
                     canonical_serial = snipe_match["Serial Number"]
@@ -972,24 +937,23 @@ def api_ocr():
                     cand["verified"] = True
                     cand["label"] = f"{cand['label']} (✓ Verified in Snipe-IT)"
                     verified_primary = canonical_serial
-                    logging.info(f"[OCR] Candidate {cand['raw']} VERIFIED against Snipe-IT as: {canonical_serial}")
+                    logging.info(f"[Barcode] Candidate {cand['raw']} VERIFIED against Snipe-IT as: {canonical_serial}")
                     break
 
         candidates.sort(key=lambda x: x["confidence"], reverse=True)
         primary = verified_primary or (candidates[0]["value"] if candidates else None)
-        combined_text = "\n".join(raw_text_parts)
 
-        logging.info(f"[OCR/Barcode] Processed image -> Found {len(candidates)} candidates. Primary: {primary}")
+        logging.info(f"[Barcode Scan] Processed image -> Found {len(candidates)} barcode candidates. Primary: {primary}")
 
         return jsonify({
             "success": True,
             "primary": primary,
             "candidates": candidates,
-            "raw_text": combined_text
+            "raw_text": primary or ""
         })
     except Exception as e:
-        logging.error(f"[OCR] Processing error: {e}", exc_info=True)
-        return jsonify({"error": f"Scanning failed: {str(e)}", "success": False}), 500
+        logging.error(f"[Barcode] Processing error: {e}", exc_info=True)
+        return jsonify({"error": f"Barcode scan failed: {str(e)}", "success": False}), 500
 
 
 @app.route("/lookup", methods=["POST"])
