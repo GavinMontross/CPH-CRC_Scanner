@@ -27,11 +27,23 @@ from openpyxl import load_workbook, Workbook
 from openpyxl.utils import get_column_letter
 
 try:
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+except ImportError:
+    pass
+
+try:
     import pytesseract
     from PIL import Image, ImageEnhance, ImageOps, ImageFilter
     OCR_AVAILABLE = True
 except ImportError:
     OCR_AVAILABLE = False
+
+try:
+    import zxingcpp
+    ZXING_AVAILABLE = True
+except ImportError:
+    ZXING_AVAILABLE = False
 
 try:
     from pyzbar.pyzbar import decode as decode_barcode
@@ -236,17 +248,61 @@ def ensure_csv():
                 writer.writerow(CSV_HEADERS)
 
 
+snipe_session = requests.Session()
+
+# OCR Character Confusion Map (for Ground-Truth Snipe-IT Validation)
+CONFUSION_MAP = {
+    '0': ['O', 'Q', 'D'],
+    'O': ['0', 'Q', 'D'],
+    'Q': ['0', 'O'],
+    '1': ['I', 'L'],
+    'I': ['1', 'L'],
+    'L': ['1', 'I'],
+    '5': ['S'],
+    'S': ['5'],
+    '8': ['B'],
+    'B': ['8'],
+    '2': ['Z'],
+    'Z': ['2'],
+    'U': ['V'],
+    'V': ['U'],
+}
+
+def generate_confusion_variants(term, max_variants=10):
+    """Generates plausible serial variants based on common OCR character confusion."""
+    clean = term.strip().upper()
+    variants = [clean]
+    seen = {clean}
+
+    # High-priority Lenovo serial heuristic: PC-10... -> PC-1Q...
+    if re.search(r'\b[A-Z]{2}[-]?[1I][0O]', clean):
+        q_fix = re.sub(r'([A-Z]{2}[-]?[1I])[0O]', r'\g<1>Q', clean)
+        if q_fix not in seen:
+            variants.append(q_fix)
+            seen.add(q_fix)
+
+    # Single-character substitution variants
+    for idx, ch in enumerate(clean):
+        if ch in CONFUSION_MAP:
+            for alt in CONFUSION_MAP[ch]:
+                variant = clean[:idx] + alt + clean[idx+1:]
+                if variant not in seen:
+                    variants.append(variant)
+                    seen.add(variant)
+                if len(variants) >= max_variants:
+                    break
+        if len(variants) >= max_variants:
+            break
+
+    return variants
+
 def format_temple_tag(tag):
-    """Removes 'CPH' or cuts the string off at 5 characters."""
+    """Normalizes Temple asset tag by stripping common prefixes without truncation."""
     if not tag:
         return ""
-
     tag_str = str(tag).strip()
-
-    if tag_str.upper().startswith("CPH"):
-        return tag_str[3:]
-    else:
-        return tag_str[:5]
+    clean = re.sub(r'^(?:CPH|TU)[-_]?', '', tag_str, flags=re.I)
+    return clean.strip()
 
 
 def append_row(data):
@@ -286,9 +342,11 @@ def append_row(data):
 
 
 def lookup_snipe(term):
-    if not SNIPE_URL or not SNIPE_TOKEN:
-        return None
-    if not term:
+    """
+    Looks up asset in Snipe-IT with connection pooling, null protection,
+    fuzzy search verification, and OCR confusion-map fallback.
+    """
+    if not SNIPE_URL or not SNIPE_TOKEN or not term:
         return None
 
     base_api = SNIPE_URL.rstrip("/")
@@ -299,7 +357,7 @@ def lookup_snipe(term):
 
     def get_data(url, params=None):
         try:
-            r = requests.get(
+            r = snipe_session.get(
                 url,
                 headers=headers,
                 params=params,
@@ -308,46 +366,77 @@ def lookup_snipe(term):
             )
             if r.status_code == 200:
                 d = r.json()
-                if "id" in d:
+                if isinstance(d, dict) and "id" in d:
                     return [d]
-                return d.get("rows", [])
+                if isinstance(d, dict) and "rows" in d:
+                    return d.get("rows", [])
             return []
-        except:
+        except Exception as e:
+            logging.warning(f"[Snipe-IT] Request to {url} failed: {e}")
             return []
 
     clean_term = term.strip()
-    terms_to_try = [clean_term]
+    primary_terms = [clean_term]
 
     if clean_term.upper().startswith("1S") and len(clean_term) >= 14:
-        terms_to_try.append(clean_term[-8:])
-        terms_to_try.append(clean_term[2:])
+        primary_terms.append(clean_term[-8:])
+        primary_terms.append(clean_term[2:])
 
     if "-" in clean_term:
-        terms_to_try.append(clean_term.replace("-", ""))
+        primary_terms.append(clean_term.replace("-", ""))
     elif len(clean_term) == 8 and clean_term[2] != "-":
-        terms_to_try.append(f"{clean_term[:2]}-{clean_term[2:]}")
+        primary_terms.append(f"{clean_term[:2]}-{clean_term[2:]}")
+
+    # Build search list with confusion variants
+    all_terms = list(primary_terms)
+    for t in primary_terms:
+        for var in generate_confusion_variants(t):
+            if var not in all_terms:
+                all_terms.append(var)
+
+    target_set = {re.sub(r'[^A-Za-z0-9]', '', x).upper() for x in all_terms}
 
     rows = []
-    for t in terms_to_try:
+    for t in all_terms:
+        # 1. Exact Tag lookup
         rows = get_data(f"{base_api}/hardware/bytag/{t}")
-        if not rows:
-            rows = get_data(f"{base_api}/hardware/byserial/{t}")
-        if not rows:
-            rows = get_data(f"{base_api}/hardware", params={"search": t, "limit": 1})
         if rows:
             break
+        # 2. Exact Serial lookup
+        rows = get_data(f"{base_api}/hardware/byserial/{t}")
+        if rows:
+            break
+        # 3. Verified fuzzy search fallback
+        fuzzy_rows = get_data(f"{base_api}/hardware", params={"search": t, "limit": 1})
+        if fuzzy_rows:
+            cand = fuzzy_rows[0]
+            cand_s = re.sub(r'[^A-Za-z0-9]', '', str(cand.get("serial") or "")).upper()
+            cand_t = re.sub(r'[^A-Za-z0-9]', '', str(cand.get("asset_tag") or "")).upper()
+            if cand_s in target_set or cand_t in target_set:
+                rows = fuzzy_rows
+                break
+            else:
+                logging.info(f"[Snipe-IT] Discarded unverified fuzzy match for '{t}': {cand_s} / {cand_t}")
 
     if rows:
         hw = rows[0]
-        manuf = hw.get("manufacturer", {}).get("name", "")
-        model = hw.get("model", {}).get("name", "")
+        # Null-safe access
+        manuf_data = hw.get("manufacturer")
+        manuf = (manuf_data.get("name", "") if isinstance(manuf_data, dict) else "") or ""
+
+        model_data = hw.get("model")
+        model = (model_data.get("name", "") if isinstance(model_data, dict) else "") or ""
+
+        cat_data = hw.get("category")
+        cat_name = (cat_data.get("name", "Computer") if isinstance(cat_data, dict) else "Computer") or "Computer"
+
         full_desc = f"{manuf} {model}".strip()
 
         return {
-            "Equipment Type": hw.get("category", {}).get("name", "Computer"),
+            "Equipment Type": cat_name,
             "Item Description": full_desc,
-            "Serial Number": hw.get("serial", ""),
-            "Temple Tag": format_temple_tag(hw.get("asset_tag", "")),
+            "Serial Number": hw.get("serial") or "",
+            "Temple Tag": format_temple_tag(hw.get("asset_tag") or ""),
         }
     return None
 
@@ -533,8 +622,11 @@ def auth_callback():
     session.permanent = True
 
     next_url = session.pop("next_url", None)
-    if not next_url or any(bad in next_url.lower() for bad in ("callback", "login", "logout")):
+    # Strictly validate relative path (starts with / and not //) to prevent open redirects or HTML injection
+    if not next_url or not str(next_url).startswith("/") or str(next_url).startswith("//") or any(bad in str(next_url).lower() for bad in ("callback", "login", "logout")):
         next_url = url_for("index")
+
+    safe_next_url = urllib.parse.quote(str(next_url), safe="/?=&")
 
     # Use an HTML 200 response with client-side redirect.
     # This ensures Safari and iOS (ITP) save the session cookie before navigating to the dashboard,
@@ -544,8 +636,8 @@ def auth_callback():
 <head>
     <meta charset="utf-8">
     <title>Signing in | CPH CRC Scanner</title>
-    <meta http-equiv="refresh" content="0;url={next_url}">
-    <script>window.location.replace({json.dumps(next_url)});</script>
+    <meta http-equiv="refresh" content="0;url={safe_next_url}">
+    <script>window.location.replace({json.dumps(safe_next_url)});</script>
 </head>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding-top: 100px; color: #555;">
     <p style="font-size: 1.1rem; font-weight: 600;">Signing in to CPH CRC Scanner...</p>
@@ -680,9 +772,9 @@ def parse_equipment_text(raw_text):
 
 @app.route("/ocr", methods=["POST"])
 def api_ocr():
-    if not OCR_AVAILABLE and not BARCODE_AVAILABLE:
+    if not OCR_AVAILABLE and not BARCODE_AVAILABLE and not ZXING_AVAILABLE:
         return jsonify({
-            "error": "Image scanning engine (pyzbar/pytesseract) is not installed on this server.",
+            "error": "Image scanning engine (zxing/pyzbar/pytesseract) is not installed on this server.",
             "success": False
         }), 500
 
@@ -734,7 +826,7 @@ def api_ocr():
         candidates = []
         seen = set()
 
-        def register_candidate(val, label, confidence):
+        def register_candidate(val, label, confidence, is_verified=False):
             clean = re.sub(r'[^A-Za-z0-9]', '', val).upper()
             if not clean or len(clean) < 4 or clean in seen:
                 return
@@ -746,61 +838,118 @@ def api_ocr():
                 "value": formatted,
                 "raw": clean,
                 "label": label,
-                "confidence": confidence
+                "confidence": confidence,
+                "verified": is_verified
             })
 
-        # --- STEP 1: Direct 1D & 2D Barcode Decoding (100% precision) ---
-        if BARCODE_AVAILABLE:
+        # --- STEP 1: High-Precision Barcode Decoding (zxing-cpp + pyzbar) ---
+        barcode_found = False
+        if ZXING_AVAILABLE:
+            try:
+                z_results = zxingcpp.read_barcodes(image)
+                for b in z_results:
+                    raw_data = (b.text or "").strip()
+                    clean_b = re.sub(r'[^A-Za-z0-9]', '', raw_data).upper()
+                    b_type = str(b.format).split(".")[-1]
+
+                    if clean_b.startswith("1S") and len(clean_b) >= 14:
+                        serial_part = clean_b[-8:]
+                        type_part = clean_b[2:-8]
+                        register_candidate(serial_part, f"Barcode Serial ({b_type})", 100, is_verified=True)
+                        if len(type_part) >= 4:
+                            fmt_type = f"{type_part[:4]}-{type_part[4:]}" if len(type_part) == 10 else type_part
+                            register_candidate(fmt_type, f"Barcode Model ({b_type})", 80)
+                        barcode_found = True
+                    elif clean_b.startswith("TU") or (clean_b.isdigit() and len(clean_b) in (5, 6, 7)):
+                        register_candidate(clean_b, f"Barcode Tag ({b_type})", 100, is_verified=True)
+                        barcode_found = True
+                    elif len(clean_b) >= 5:
+                        register_candidate(clean_b, f"Barcode ({b_type})", 98)
+                        barcode_found = True
+            except Exception as z_err:
+                logging.warning(f"[OCR] zxing-cpp decode error: {z_err}")
+
+        if not barcode_found and BARCODE_AVAILABLE:
             try:
                 barcodes = decode_barcode(image)
                 for b in barcodes:
                     raw_data = b.data.decode('utf-8', errors='replace').strip()
                     clean_b = re.sub(r'[^A-Za-z0-9]', '', raw_data).upper()
 
-                    # Lenovo 1S barcode string (e.g. 1S20UH000FUSPC1QLZMC -> serial is PC-1QLZMC)
                     if clean_b.startswith("1S") and len(clean_b) >= 14:
                         serial_part = clean_b[-8:]
                         type_part = clean_b[2:-8]
-                        register_candidate(serial_part, f"Barcode Serial ({b.type})", 100)
+                        register_candidate(serial_part, f"Barcode Serial ({b.type})", 100, is_verified=True)
                         if len(type_part) >= 4:
                             fmt_type = f"{type_part[:4]}-{type_part[4:]}" if len(type_part) == 10 else type_part
                             register_candidate(fmt_type, f"Barcode Model ({b.type})", 80)
                     elif clean_b.startswith("TU") or (clean_b.isdigit() and len(clean_b) in (5, 6, 7)):
-                        register_candidate(clean_b, f"Barcode Tag ({b.type})", 100)
-                    else:
+                        register_candidate(clean_b, f"Barcode Tag ({b.type})", 100, is_verified=True)
+                    elif len(clean_b) >= 5:
                         register_candidate(clean_b, f"Barcode ({b.type})", 98)
             except Exception as b_err:
-                logging.warning(f"[OCR] Barcode decode error: {b_err}")
+                logging.warning(f"[OCR] pyzbar decode error: {b_err}")
 
-        # --- STEP 2: Multi-Pass Optical Character Recognition ---
+        # --- STEP 2: Optimized Multi-Pass OCR with Safe Clamping & Polarity Detection ---
         raw_text_parts = []
         if OCR_AVAILABLE:
             gray = image.convert("L")
-            inverted = ImageOps.invert(gray)
-
-            # Upscale and sharpen for crisp character edges (fixes Q vs 0/O confusion)
             w, h = gray.size
-            scale = max(2.0, 1600.0 / max(w, 1))
-            scaled_w, scaled_h = int(w * scale), int(h * scale)
 
-            scaled_inv = inverted.resize((scaled_w, scaled_h), Image.Resampling.LANCZOS).filter(ImageFilter.SHARPEN)
-            scaled_gray = gray.resize((scaled_w, scaled_h), Image.Resampling.LANCZOS).filter(ImageFilter.SHARPEN)
+            # Clamped scaling: target 1600-2200px width. Never upscale an already large 4000px iPhone photo!
+            if w > 2400:
+                scale = 2000.0 / w
+            elif w < 1200:
+                scale = min(2.5, 1600.0 / max(w, 1))
+            else:
+                scale = 1.0
 
-            # Pass A: Inverted image with sparse text segmentation (best for white-on-black sticker text)
+            if scale != 1.0:
+                scaled_w, scaled_h = int(w * scale), int(h * scale)
+                processed_gray = gray.resize((scaled_w, scaled_h), Image.Resampling.LANCZOS)
+            else:
+                processed_gray = gray
+
+            # Polarity detection via mean luminance (dark sticker vs light sticker)
+            stat_lum = list(processed_gray.getdata())
+            mean_lum = sum(stat_lum) / len(stat_lum) if stat_lum else 128
+            is_dark_bg = mean_lum < 115
+
+            # Contrast normalization (no artificial edge-ringing SHARPEN)
+            enhancer = ImageEnhance.Contrast(processed_gray)
+            boosted_gray = enhancer.enhance(1.35)
+            boosted_inv = ImageOps.invert(boosted_gray)
+
+            # Determine primary vs secondary image based on sticker polarity
+            primary_img = boosted_inv if is_dark_bg else boosted_gray
+            secondary_img = boosted_gray if is_dark_bg else boosted_inv
+
+            tess_cfg_sparse = "--oem 3 --psm 11 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:/#."
+            tess_cfg_block = "--oem 3 --psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-:/#."
+
+            # Pass 1: Primary polarity with sparse segmentation
             try:
-                txt_inv = pytesseract.image_to_string(scaled_inv, config="--oem 3 --psm 11")
-                if txt_inv:
-                    raw_text_parts.append(txt_inv)
+                txt1 = pytesseract.image_to_string(primary_img, config=tess_cfg_sparse)
+                if txt1:
+                    raw_text_parts.append(txt1)
             except Exception as e:
-                pass
+                logging.debug(f"OCR Pass 1 error: {e}")
 
-            # Pass B: Normal image with block segmentation
+            # Pass 2: Primary polarity with block segmentation
             try:
-                txt_gray = pytesseract.image_to_string(scaled_gray, config="--oem 3 --psm 6")
-                if txt_gray:
-                    raw_text_parts.append(txt_gray)
+                txt2 = pytesseract.image_to_string(primary_img, config=tess_cfg_block)
+                if txt2:
+                    raw_text_parts.append(txt2)
             except Exception as e:
-                pass
+                logging.debug(f"OCR Pass 2 error: {e}")
+
+            # Pass 3: Secondary polarity fallback
+            try:
+                txt3 = pytesseract.image_to_string(secondary_img, config=tess_cfg_block)
+                if txt3:
+                    raw_text_parts.append(txt3)
+            except Exception as e:
+                logging.debug(f"OCR Pass 3 error: {e}")
 
             combined_ocr_text = "\n".join(raw_text_parts)
             ocr_res = parse_equipment_text(combined_ocr_text)
@@ -809,8 +958,25 @@ def api_ocr():
             for c in ocr_res["candidates"]:
                 register_candidate(c["value"], c["label"], c["confidence"])
 
+        # --- STEP 3: Snipe-IT Ground-Truth Validation Lever ---
+        # Validate candidates against Snipe-IT inventory ground truth
+        verified_primary = None
+        if SNIPE_URL and SNIPE_TOKEN and candidates:
+            # Check the top 4 candidates against Snipe-IT
+            for cand in candidates[:4]:
+                snipe_match = lookup_snipe(cand["value"])
+                if snipe_match and snipe_match.get("Serial Number"):
+                    canonical_serial = snipe_match["Serial Number"]
+                    cand["value"] = canonical_serial
+                    cand["confidence"] = 100
+                    cand["verified"] = True
+                    cand["label"] = f"{cand['label']} (✓ Verified in Snipe-IT)"
+                    verified_primary = canonical_serial
+                    logging.info(f"[OCR] Candidate {cand['raw']} VERIFIED against Snipe-IT as: {canonical_serial}")
+                    break
+
         candidates.sort(key=lambda x: x["confidence"], reverse=True)
-        primary = candidates[0]["value"] if candidates else None
+        primary = verified_primary or (candidates[0]["value"] if candidates else None)
         combined_text = "\n".join(raw_text_parts)
 
         logging.info(f"[OCR/Barcode] Processed image -> Found {len(candidates)} candidates. Primary: {primary}")
@@ -909,7 +1075,15 @@ def api_finalize():
                 next(reader, None)
 
                 for row in reader:
-                    ws.append(row)
+                    # Sanitize cells to prevent CSV/Excel formula injection
+                    sanitized_row = []
+                    for cell in row:
+                        cell_str = str(cell)
+                        if cell_str and cell_str[0] in ("=", "+", "-", "@"):
+                            sanitized_row.append(f"'{cell_str}")
+                        else:
+                            sanitized_row.append(cell_str)
+                    ws.append(sanitized_row)
 
             wb.save(dest_path)
             os.remove(CURRENT_CSV)
@@ -1028,4 +1202,5 @@ if __name__ == "__main__":
         if os.path.exists("cert.pem") and os.path.exists("key.pem")
         else None
     )
-    app.run(host="0.0.0.0", port=5000, debug=True, ssl_context=ssl_ctx)
+    flask_debug = os.getenv("FLASK_DEBUG", "false").lower() in ("true", "1", "yes")
+    app.run(host="0.0.0.0", port=5000, debug=flask_debug, ssl_context=ssl_ctx)

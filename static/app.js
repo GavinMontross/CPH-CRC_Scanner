@@ -180,7 +180,17 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.type = 'button';
             btn.className = 'btn btn-sm btn-outline-secondary d-flex align-items-center gap-1';
             btn.style.fontSize = '0.82rem';
-            btn.innerHTML = `<span class="badge bg-light text-dark border">${c.label}</span> <strong>${c.value}</strong>`;
+
+            const badge = document.createElement('span');
+            badge.className = c.verified ? 'badge bg-success text-white' : 'badge bg-light text-dark border';
+            badge.textContent = c.label;
+
+            const val = document.createElement('strong');
+            val.textContent = c.value;
+
+            btn.appendChild(badge);
+            btn.appendChild(val);
+
             btn.addEventListener('click', () => {
                 scanInput.value = c.value;
                 performLookup(c.value);
@@ -258,9 +268,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // CAMERA SCANNER (html5-qrcode)
     // Supports: QR, Code128, Code39, EAN-13, EAN-8, UPC-A, UPC-E, ITF, etc.
     // ========================
-    cameraScanBtn.addEventListener('click', () => {
+    cameraScanBtn.addEventListener('click', async () => {
         if (isScanning) {
-            stopCamera();
+            await stopCamera();
         } else {
             startCamera();
         }
@@ -268,10 +278,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Auto-restart camera with new format filters if user changes mode during scan
     document.querySelectorAll('input[name="scanMode"]').forEach(radio => {
-        radio.addEventListener('change', () => {
+        radio.addEventListener('change', async () => {
             if (isScanning) {
-                stopCamera();
-                setTimeout(startCamera, 150);
+                await stopCamera();
+                startCamera();
             }
         });
     });
@@ -419,7 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function stopCamera() {
+    async function stopCamera() {
         if (nativeScanInterval) {
             clearInterval(nativeScanInterval);
             nativeScanInterval = null;
@@ -428,10 +438,13 @@ document.addEventListener('DOMContentLoaded', () => {
             cameraControls.style.display = 'none';
         }
         if (html5QrCode) {
-            html5QrCode.stop().then(() => {
+            try {
+                await html5QrCode.stop();
                 html5QrCode.clear();
-                html5QrCode = null;
-            }).catch(err => console.error("Camera stop error:", err));
+            } catch (err) {
+                console.warn("Camera stop error:", err);
+            }
+            html5QrCode = null;
         }
         const reticle = cameraRegion.querySelector('.ocr-reticle');
         if (reticle) reticle.remove();
@@ -694,40 +707,70 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function promptEditRow(oldType, oldDesc, oldSerial, oldTag) {
-        const newType = prompt("Equipment Type:", oldType) ?? oldType;
-        const newDesc = prompt("Item Description:", oldDesc) ?? oldDesc;
-        const newSerial = prompt("Serial Number:", oldSerial) ?? oldSerial;
-        const newTag = prompt("Temple Tag:", oldTag) ?? oldTag;
-
-        if (newType === oldType && newDesc === oldDesc && newSerial === oldSerial && newTag === oldTag) {
-            return;
-        }
-
-        try {
-            const response = await fetch("edit_row", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    old_serial: oldSerial,
-                    new_data: {
-                        "Equipment Type": newType,
-                        "Item Description": newDesc,
-                        "Serial Number": newSerial,
-                        "Temple Tag": newTag
-                    }
-                })
-            });
-
-            if (response.ok) {
-                showToast('Updated');
-                loadRecent();
-            } else {
-                showToast('Failed to update', true);
+    let editModalInstance = null;
+    function promptEditRow(oldType, oldDesc, oldSerial, oldTag) {
+        const modalEl = document.getElementById('editItemModal');
+        if (modalEl && window.bootstrap) {
+            document.getElementById('editOldSerial').value = oldSerial;
+            document.getElementById('editEquipType').value = oldType;
+            document.getElementById('editItemDesc').value = oldDesc;
+            document.getElementById('editSerialNum').value = oldSerial;
+            document.getElementById('editTempleTag').value = oldTag;
+            if (!editModalInstance) {
+                editModalInstance = new bootstrap.Modal(modalEl);
             }
-        } catch (err) {
-            console.error(err);
+            editModalInstance.show();
+        } else {
+            equipType.value = oldType;
+            itemDesc.value = oldDesc;
+            serialNum.value = oldSerial;
+            templeTag.value = oldTag;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            showToast('Loaded into form for editing');
         }
+    }
+
+    const saveEditModalBtn = document.getElementById('saveEditModalBtn');
+    if (saveEditModalBtn) {
+        saveEditModalBtn.addEventListener('click', async () => {
+            const oldSerial = document.getElementById('editOldSerial').value;
+            const newType = document.getElementById('editEquipType').value.trim();
+            const newDesc = document.getElementById('editItemDesc').value.trim();
+            const newSerial = document.getElementById('editSerialNum').value.trim();
+            const newTag = document.getElementById('editTempleTag').value.trim();
+
+            if (!newSerial) {
+                showToast("Serial Number is required", true);
+                return;
+            }
+
+            try {
+                const response = await fetch("edit_row", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        old_serial: oldSerial,
+                        new_data: {
+                            "Equipment Type": newType,
+                            "Item Description": newDesc,
+                            "Serial Number": newSerial,
+                            "Temple Tag": newTag
+                        }
+                    })
+                });
+
+                if (response.ok) {
+                    showToast('Updated');
+                    if (editModalInstance) editModalInstance.hide();
+                    loadRecent();
+                } else {
+                    showToast('Failed to update', true);
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Network error updating item', true);
+            }
+        });
     }
 
     // ========================
@@ -829,6 +872,12 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error("Error loading files:", err);
         }
     }
+
+    const refreshFilesBtn = document.getElementById('refreshFilesBtn');
+    if (refreshFilesBtn) {
+        refreshFilesBtn.addEventListener('click', loadCompletedFiles);
+    }
+    window.loadCompletedFiles = loadCompletedFiles;
 
     // Prevent XSS in table cells
     function escapeHtml(str) {
