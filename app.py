@@ -35,10 +35,12 @@ app.secret_key = os.getenv(
     "FLASK_SECRET_KEY", "cph-crc-scanner-session-secret-9b2f8a1c4e7d0"
 )
 app.config["SESSION_COOKIE_NAME"] = "cph_crc_session"
+app.config["SESSION_COOKIE_PATH"] = "/"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+# Must be True on HTTPS so Safari and iOS devices don't drop the cookie
 app.config["SESSION_COOKIE_SECURE"] = (
-    os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
+    os.getenv("SESSION_COOKIE_SECURE", "true").lower() == "true"
 )
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=12)
 
@@ -320,7 +322,10 @@ def check_sso_authentication():
         return None
 
     # Exempt authentication flow endpoints
-    if request.endpoint in {"login", "auth_callback"}:
+    if (
+        request.endpoint in {"login", "auth_callback"}
+        or request.path.startswith(("/auth/callback", "/callback", "/login", "/logout"))
+    ):
         return None
 
     # If user is already authenticated
@@ -355,8 +360,11 @@ def check_sso_authentication():
             401,
         )
 
-    # Save target URL to return user after authentication
-    session["next_url"] = request.url
+    # Save target URL to return user after authentication (never redirect back into auth endpoints)
+    if request.path not in {"/login", "/logout"} and not request.path.startswith(("/auth", "/callback")):
+        session["next_url"] = request.url
+    else:
+        session["next_url"] = url_for("index")
     return redirect(url_for("login"))
 
 
@@ -479,7 +487,9 @@ def auth_callback():
     session.permanent = True
 
     next_url = session.pop("next_url", None)
-    return redirect(next_url or url_for("index"))
+    if not next_url or any(bad in next_url.lower() for bad in ("callback", "login", "logout")):
+        next_url = url_for("index")
+    return redirect(next_url)
 
 
 @app.route("/logout")
