@@ -321,7 +321,25 @@
     <div id="scanToast" class="scan-toast"></div>
 
     <div class="app-container">
-        <h2 class="brand-header">CPH CRC Scanner</h2>
+        <div class="brand-bar d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-3" style="border-color: var(--temple-cherry) !important;">
+            <div class="d-flex align-items-center gap-2">
+                <img src="/images/templelogo.png" alt="Temple Logo" style="height: 32px; width: auto;">
+                <h2 class="m-0" style="color: var(--temple-cherry); font-weight: 700; text-transform: uppercase; letter-spacing: 1px; font-size: 1.25rem;">CPH CRC Scanner</h2>
+            </div>
+            {% if user %}
+            <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center gap-2 bg-white px-2 py-1 rounded border shadow-sm">
+                    {% if user.photo %}
+                    <img src="data:image/jpeg;base64,{{ user.photo }}" alt="User Photo" style="width: 26px; height: 26px; border-radius: 50%; object-fit: cover;">
+                    {% else %}
+                    <span style="font-size: 1rem;">👤</span>
+                    {% endif %}
+                    <span class="small fw-semibold text-truncate d-none d-sm-inline" style="max-width: 150px;" title="{{ user.email }}">{{ user.name }}</span>
+                </div>
+                <a href="/logout" class="btn btn-outline-danger btn-sm" title="Sign out">Sign Out</a>
+            </div>
+            {% endif %}
+        </div>
 
         <!-- Mobile tab bar -->
         <div class="mobile-tabs" id="mobileTabs">

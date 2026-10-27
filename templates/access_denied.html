@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Access Denied | CPH CRC Scanner</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="icon" href="/images/templelogo.png" type="image/png">
+    <style>
+        :root {
+            --temple-cherry: #9D2235;
+            --temple-dark: #7b1b2a;
+            --temple-gray: #f5f5f5;
+        }
+        body {
+            background-color: var(--temple-gray);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+        }
+        .denied-card {
+            background: white;
+            max-width: 480px;
+            width: 100%;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            border-top: 5px solid #dc3545;
+            padding: 2.25rem 2rem;
+            text-align: center;
+        }
+        .logo-img {
+            height: 60px;
+            margin-bottom: 1rem;
+        }
+        .denied-title {
+            color: #dc3545;
+            font-weight: 700;
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .user-email-badge {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 0.4rem 0.8rem;
+            display: inline-block;
+            font-size: 0.88rem;
+            color: #495057;
+            margin-bottom: 1.25rem;
+        }
+        .message {
+            color: #555;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            margin-bottom: 1.5rem;
+        }
+        .btn-signout {
+            background-color: var(--temple-cherry);
+            border-color: var(--temple-cherry);
+            color: white;
+            font-weight: 600;
+            padding: 0.6rem 1.5rem;
+            border-radius: 8px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn-signout:hover {
+            background-color: var(--temple-dark);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="denied-card">
+        <img src="/images/templelogo.png" alt="Temple University Logo" class="logo-img">
+        <h1 class="denied-title">Access Denied</h1>
+        
+        <div class="user-email-badge">
+            👤 {{ user_email }}
+        </div>
+
+        <p class="message">
+            You are successfully signed in with your Temple Microsoft account, but your account is not a member of the authorized groups required to access the <strong>CPH CRC Scanner</strong>.
+        </p>
+
+        <div class="alert alert-light border text-start small mb-3">
+            <strong>Need access?</strong><br>
+            Please contact the College of Public Health IT team to request access to the authorized group.
+        </div>
+
+        <a href="/logout" class="btn btn-signout">Sign Out / Switch Account</a>
+    </div>
+</body>
+</html>

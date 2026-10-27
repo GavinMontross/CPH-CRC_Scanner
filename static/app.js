@@ -1,3 +1,13 @@
+// Global interceptor for expired SSO session
+const _originalFetch = window.fetch;
+window.fetch = async function(...args) {
+    const res = await _originalFetch.apply(this, args);
+    if (res.status === 401) {
+        window.location.href = '/login';
+    }
+    return res;
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     const scanInput = document.getElementById('scanInput');
     const manualLookupBtn = document.getElementById('manualLookupBtn');
