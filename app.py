@@ -138,13 +138,14 @@ def decode_jwt(token):
     return {}
 
 
-def check_user_group_membership(access_token, allowed_group_ids):
+def check_user_group_membership(access_token, allowed_group_ids, user_email=""):
     """
     Checks if the authenticated user is a member of any of the allowed AD/Entra groups
     via Microsoft Graph checkMemberGroups API.
     """
     if not allowed_group_ids:
-        return True  # Open to all if no groups specified
+        logging.info(f"No allowed groups specified; allowing access for {user_email}.")
+        return True
 
     url = "https://graph.microsoft.com/v1.0/me/checkMemberGroups"
     headers = {
@@ -158,7 +159,33 @@ def check_user_group_membership(access_token, allowed_group_ids):
         if resp.status_code == 200:
             data = resp.json()
             matching_groups = data.get("value", [])
-            return len(matching_groups) > 0
+            logging.info(
+                f"Group check for {user_email}: Checked {len(allowed_group_ids)} groups -> Found {len(matching_groups)} matches: {matching_groups}"
+            )
+            if matching_groups:
+                return True
+
+            # If no matches found, query the user's actual groups to help diagnose
+            try:
+                mg_resp = requests.post(
+                    "https://graph.microsoft.com/v1.0/me/getMemberGroups",
+                    headers=headers,
+                    json={"securityEnabledOnly": False},
+                    timeout=5,
+                )
+                if mg_resp.status_code == 200:
+                    actual_groups = mg_resp.json().get("value", [])
+                    logging.warning(
+                        f"User {user_email} is NOT in allowed groups ({allowed_group_ids}). User's actual groups ({len(actual_groups)}): {actual_groups[:15]}"
+                    )
+                else:
+                    logging.warning(
+                        f"Could not retrieve actual groups for {user_email}: HTTP {mg_resp.status_code} - {mg_resp.text}"
+                    )
+            except Exception as e:
+                logging.debug(f"Failed to fetch getMemberGroups: {e}")
+
+            return False
         else:
             logging.error(f"Graph API Group Check Failed: HTTP {resp.status_code} - {resp.text}")
             return False
@@ -464,7 +491,10 @@ def auth_callback():
     )
 
     # Validate Group Membership against authorized AD/Entra groups
-    is_authorized = check_user_group_membership(access_token, ALLOWED_GROUPS)
+    logging.info(f"Callback received for {user_email}. Verifying membership in {ALLOWED_GROUPS}...")
+    is_authorized = check_user_group_membership(
+        access_token, ALLOWED_GROUPS, user_email=user_email
+    )
     if not is_authorized:
         logging.warning(
             f"Access Denied: User {user_email} is not in allowed groups ({ALLOWED_GROUPS})."
@@ -486,7 +516,23 @@ def auth_callback():
     next_url = session.pop("next_url", None)
     if not next_url or any(bad in next_url.lower() for bad in ("callback", "login", "logout")):
         next_url = url_for("index")
-    return redirect(next_url)
+
+    # Use an HTML 200 response with client-side redirect.
+    # This ensures Safari and iOS (ITP) save the session cookie before navigating to the dashboard,
+    # completely eliminating the "Too many redirects" loop on Safari.
+    html_redirect = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Signing in | CPH CRC Scanner</title>
+    <meta http-equiv="refresh" content="0;url={next_url}">
+    <script>window.location.replace({json.dumps(next_url)});</script>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding-top: 100px; color: #555;">
+    <p style="font-size: 1.1rem; font-weight: 600;">Signing in to CPH CRC Scanner...</p>
+</body>
+</html>"""
+    return html_redirect, 200, {"Content-Type": "text/html"}
 
 
 @app.route("/logout")
