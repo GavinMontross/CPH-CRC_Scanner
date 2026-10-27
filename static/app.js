@@ -125,20 +125,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const ctx = canvas.getContext('2d');
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            const crop = {
-                normalized: true,
-                x: 0.05,
-                y: 0.15,
-                width: 0.90,
-                height: 0.70
-            };
-
             const res = await fetch('ocr', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    image: canvas.toDataURL('image/jpeg', 0.90),
-                    crop: crop
+                    image: canvas.toDataURL('image/jpeg', 0.90)
                 })
             });
 
@@ -317,10 +308,12 @@ document.addEventListener('DOMContentLoaded', () => {
         let qrboxFn;
 
         if (mode === 'ocr') {
-            // Text / OCR Mode: Camera stream for live frame capture
+            // Text / OCR Mode: Wide centered rectangle for serial numbers & barcodes
             formatsToSupport = [Html5QrcodeSupportedFormats.QR_CODE];
             qrboxFn = function(viewfinderWidth, viewfinderHeight) {
-                return { width: Math.floor(viewfinderWidth * 0.92), height: Math.floor(viewfinderHeight * 0.65) };
+                const width = Math.min(Math.floor(viewfinderWidth * 0.88), 460);
+                const height = Math.min(Math.floor(viewfinderHeight * 0.58), 180);
+                return { width, height };
             };
         } else {
             // QR Mode: 2D asset tags (Temple QR, Data Matrix)
@@ -330,7 +323,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ];
             qrboxFn = function(viewfinderWidth, viewfinderHeight) {
                 const minDim = Math.min(viewfinderWidth, viewfinderHeight);
-                const size = Math.floor(minDim * 0.75);
+                const size = Math.floor(minDim * 0.70);
                 return { width: size, height: size };
             };
         }
@@ -383,26 +376,14 @@ document.addEventListener('DOMContentLoaded', () => {
             // In OCR mode: show OCR capture button and top aiming guide
             if (mode === 'ocr') {
                 if (ocrCaptureBtn) ocrCaptureBtn.style.display = 'inline-flex';
-                if (ocrAimGuide) ocrAimGuide.style.display = 'block';
-                const existingReticle = cameraRegion.querySelector('.ocr-reticle');
-                if (!existingReticle) {
-                    const reticle = document.createElement('div');
-                    reticle.className = 'ocr-reticle';
-                    reticle.innerHTML = `
-                        <span class="bracket bracket-tl"></span>
-                        <span class="bracket bracket-tr"></span>
-                        <span class="bracket bracket-bl"></span>
-                        <span class="bracket bracket-br"></span>
-                        <span class="ocr-reticle-label">Align Serial / Label</span>
-                    `;
-                    cameraRegion.appendChild(reticle);
+                if (ocrAimGuide) {
+                    ocrAimGuide.style.display = 'block';
+                    ocrAimGuide.textContent = '🎯 Center label & tap Read Text';
                 }
                 hasControls = true;
             } else {
                 if (ocrCaptureBtn) ocrCaptureBtn.style.display = 'none';
                 if (ocrAimGuide) ocrAimGuide.style.display = 'none';
-                const reticle = cameraRegion.querySelector('.ocr-reticle');
-                if (reticle) reticle.remove();
             }
 
             if (hasControls && cameraControls) {
@@ -464,8 +445,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             html5QrCode = null;
         }
-        const reticle = cameraRegion.querySelector('.ocr-reticle');
-        if (reticle) reticle.remove();
         if (ocrAimGuide) ocrAimGuide.style.display = 'none';
 
         if (cameraWrapper) cameraWrapper.style.display = 'none';

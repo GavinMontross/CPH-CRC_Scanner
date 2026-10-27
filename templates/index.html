@@ -296,47 +296,14 @@
             background: rgba(255, 255, 255, 0.3);
         }
 
-        /* Reticle with Corner Brackets */
-        .ocr-reticle {
-            position: absolute;
-            top: 14%;
-            left: 8%;
-            width: 84%;
-            height: 60%;
-            pointer-events: none;
-            z-index: 10;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 12px;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.38);
+        /* Clean Single Viewfinder Box (html5-qrcode shaded region) */
+        #qr-shaded-region {
+            border-radius: 14px !important;
         }
 
-        .ocr-reticle .bracket {
-            position: absolute;
-            width: 24px;
-            height: 24px;
-            border-color: #ffffff;
-            border-style: solid;
-        }
-
-        .ocr-reticle .bracket-tl { top: 0; left: 0; border-width: 3.5px 0 0 3.5px; border-top-left-radius: 8px; }
-        .ocr-reticle .bracket-tr { top: 0; right: 0; border-width: 3.5px 3.5px 0 0; border-top-right-radius: 8px; }
-        .ocr-reticle .bracket-bl { bottom: 0; left: 0; border-width: 0 0 3.5px 3.5px; border-bottom-left-radius: 8px; }
-        .ocr-reticle .bracket-br { bottom: 0; right: 0; border-width: 0 3.5px 3.5px 0; border-bottom-right-radius: 8px; }
-
-        .ocr-reticle-label {
-            background: rgba(0, 0, 0, 0.78);
-            color: #ffffff;
-            font-size: 0.72rem;
-            font-weight: 700;
-            padding: 4px 12px;
-            border-radius: 6px;
-            text-transform: uppercase;
-            letter-spacing: 0.6px;
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            backdrop-filter: blur(6px);
-            -webkit-backdrop-filter: blur(6px);
+        #qr-shaded-region > div {
+            border-color: rgba(255, 255, 255, 0.95) !important;
+            border-radius: 3px;
         }
 
         /* Floating Shutter HUD at Bottom of Viewfinder */
