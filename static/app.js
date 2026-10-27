@@ -130,15 +130,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
             showToast("✓ Barcode: " + data.primary);
             scanInput.value = data.primary;
-            performLookup(data.primary);
+            performLookup(data.primary, data.inferred_type, data.inferred_desc);
         } else {
             showToast("No barcode detected in photo. Try again.", true);
         }
 
-        renderCandidates(data.candidates || []);
+        renderCandidates(data.candidates || [], data.inferred_type, data.inferred_desc);
     }
 
-    function renderCandidates(candidates) {
+    function renderCandidates(candidates, defaultType = null, defaultDesc = null) {
         if (!ocrCandidatesContainer || !ocrCandidatesList) return;
         ocrCandidatesList.innerHTML = '';
 
@@ -165,7 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             btn.addEventListener('click', () => {
                 scanInput.value = c.value;
-                performLookup(c.value);
+                performLookup(c.value, defaultType, defaultDesc);
                 ocrCandidatesContainer.style.display = 'none';
             });
             ocrCandidatesList.appendChild(btn);
@@ -200,7 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
         performLookup(term);
     }
 
-    async function performLookup(term) {
+    async function performLookup(term, fallbackType = null, fallbackDesc = null) {
         statusBadge.className = 'status-pill bg-warning text-dark';
         statusBadge.innerText = 'Searching Snipe...';
 
@@ -214,17 +214,42 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!res.ok) throw new Error("Server Error: " + res.status);
             const data = await res.json();
 
+            // Prioritize Snipe-IT ground truth; fallback to auto-detected hardware classification
+            let resolvedType = '';
+            let resolvedDesc = '';
+
+            if (data.found_in_snipe) {
+                resolvedType = data['Equipment Type'] || 'Computer';
+                resolvedDesc = data['Item Description'] || '';
+            } else {
+                // If backend inferred a specific type (not default 'Computer') or auto-detected
+                if (data.auto_detected || (data['Equipment Type'] && data['Equipment Type'] !== 'Computer')) {
+                    resolvedType = data['Equipment Type'];
+                    resolvedDesc = data['Item Description'] || fallbackDesc || '';
+                } else if (fallbackType) {
+                    resolvedType = fallbackType;
+                    resolvedDesc = fallbackDesc || data['Item Description'] || '';
+                } else {
+                    resolvedType = data['Equipment Type'] || 'Computer';
+                    resolvedDesc = data['Item Description'] || '';
+                }
+            }
+
             // Auto-fill form fields
-            equipType.value = data['Equipment Type'] || '';
-            itemDesc.value = data['Item Description'] || '';
-            serialNum.value = data['Serial Number'] || '';
+            equipType.value = resolvedType;
+            itemDesc.value = resolvedDesc;
+            serialNum.value = data['Serial Number'] || term;
             templeTag.value = data['Temple Tag'] || '';
             scanInput.value = term;
 
-            // Status Badge
+            // Status Badge & Notifications
             if (data.found_in_snipe) {
                 statusBadge.className = 'status-pill bg-success text-white';
                 statusBadge.innerText = '✓ Found in Snipe-IT';
+            } else if (data.auto_detected || fallbackType || (resolvedType && resolvedType !== 'Computer') || resolvedDesc) {
+                statusBadge.className = 'status-pill bg-info text-dark';
+                statusBadge.innerText = `💡 Detected: ${resolvedType}`;
+                showToast(`💡 Auto-detected: ${resolvedType}${resolvedDesc ? ' (' + resolvedDesc + ')' : ''}`);
             } else {
                 statusBadge.className = 'status-pill bg-danger text-white';
                 statusBadge.innerText = '✗ Not in Snipe-IT (Manual)';

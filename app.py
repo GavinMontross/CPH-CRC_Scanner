@@ -341,6 +341,192 @@ def append_row(data):
             return False, str(e)
 
 
+# --- Common Enterprise Hardware Catalog & Device Classifier ---
+HARDWARE_CATALOG = {
+    # HP Enterprise & Pro Printers
+    "CE957A": ("Printer", "HP LaserJet Enterprise 500 Color M551dn"),
+    "CE958A": ("Printer", "HP LaserJet Enterprise 500 Color M551xh"),
+    "CE956A": ("Printer", "HP LaserJet Enterprise 500 Color M551n"),
+    "CE525A": ("Printer", "HP LaserJet Pro P1102w"),
+    "CE866A": ("Printer", "HP Color LaserJet Pro CP1025nw"),
+    "CF284A": ("Printer", "HP LaserJet Pro 400 M401dn"),
+    "CF285A": ("Printer", "HP LaserJet Pro 400 M401dw"),
+    "CF286A": ("Printer", "HP LaserJet Pro 400 M401dne"),
+    "CF068A": ("Printer", "HP LaserJet Enterprise 600 M601dn"),
+    "CF069A": ("Printer", "HP LaserJet Enterprise 600 M602dn"),
+    "CF070A": ("Printer", "HP LaserJet Enterprise 600 M603dn"),
+    "CF116A": ("Printer", "HP LaserJet Enterprise 500 MFP M525dn"),
+    "CZ244A": ("Printer", "HP LaserJet Pro MFP M127fn"),
+    "CZ181A": ("Printer", "HP LaserJet Pro MFP M125nw"),
+    "G3Q57A": ("Printer", "HP LaserJet Pro M402dn"),
+    "G3Q58A": ("Printer", "HP LaserJet Pro M402dw"),
+    "W1A53A": ("Printer", "HP LaserJet Pro M404dn"),
+    "W1A56A": ("Printer", "HP LaserJet Pro M404dw"),
+    "W1A28A": ("Printer", "HP Color LaserJet Pro MFP M479fdw"),
+    "W1A29A": ("Printer", "HP Color LaserJet Pro MFP M479fdn"),
+    "W1A30A": ("Printer", "HP Color LaserJet Pro MFP M479dw"),
+    "Q5911A": ("Printer", "HP LaserJet 4250dtn"),
+    "Q5401A": ("Printer", "HP LaserJet 4250n"),
+    "Q5912A": ("Printer", "HP LaserJet 4350dtn"),
+    "CC434A": ("Printer", "HP Color LaserJet CP2025dn"),
+    "CB494A": ("Printer", "HP Color LaserJet CP1518ni"),
+    "B5L24A": ("Printer", "HP Color LaserJet Enterprise M553n"),
+    "B5L25A": ("Printer", "HP Color LaserJet Enterprise M553dn"),
+    "B5L26A": ("Printer", "HP Color LaserJet Enterprise M553x"),
+    "F2A68A": ("Printer", "HP LaserJet Enterprise M506n"),
+    "F2A69A": ("Printer", "HP LaserJet Enterprise M506dn"),
+    "1PV87A": ("Printer", "HP LaserJet Enterprise M507n"),
+    "1PV88A": ("Printer", "HP LaserJet Enterprise M507dn"),
+    "7KW75A": ("Printer", "HP Color LaserJet Enterprise MFP M480f"),
+    "3PZ55A": ("Printer", "HP LaserJet Enterprise MFP M430f"),
+    "J7Z99A": ("Printer", "HP Color LaserJet Enterprise M652dn"),
+    "J8A04A": ("Printer", "HP Color LaserJet Enterprise M653dn"),
+    "K0Q18A": ("Printer", "HP LaserJet Enterprise M608dn"),
+    "K0Q19A": ("Printer", "HP LaserJet Enterprise M609dn"),
+    # Dell Docks
+    "WD15": ("Docking Station", "Dell Dock WD15"),
+    "WD19": ("Docking Station", "Dell Dock WD19"),
+    "WD19S": ("Docking Station", "Dell Dock WD19S"),
+    "WD19TB": ("Docking Station", "Dell Thunderbolt Dock WD19TB"),
+    "WD19TBS": ("Docking Station", "Dell Thunderbolt Dock WD19TBS"),
+    "WD22TB4": ("Docking Station", "Dell Thunderbolt 4 Dock WD22TB4"),
+    "D6000": ("Docking Station", "Dell Universal Dock D6000"),
+    "TB16": ("Docking Station", "Dell Thunderbolt Dock TB16"),
+    "DA300": ("Docking Station", "Dell Mobile Adapter DA300"),
+    "DA310": ("Docking Station", "Dell Mobile Adapter DA310"),
+    "HD22Q": ("Docking Station", "Dell Dual Charge Dock HD22Q"),
+    # Lenovo Docks
+    "40AY": ("Docking Station", "Lenovo ThinkPad Universal USB-C Dock"),
+    "40AN": ("Docking Station", "Lenovo ThinkPad Thunderbolt 3 Workstation Dock Gen 2"),
+    "40B0": ("Docking Station", "Lenovo ThinkPad Universal Thunderbolt 4 Dock"),
+    "40AJ": ("Docking Station", "Lenovo ThinkPad Ultra Docking Station"),
+    "40AF": ("Docking Station", "Lenovo ThinkPad Hybrid USB-C with USB-A Dock"),
+    "40AS": ("Docking Station", "Lenovo ThinkPad USB-C Dock Gen 2"),
+    "40AC": ("Docking Station", "Lenovo ThinkPad Thunderbolt 3 Dock"),
+    "40A9": ("Docking Station", "Lenovo ThinkPad USB-C Dock"),
+    # Lenovo ThinkPad & ThinkCentre Machine Types
+    "20VF": ("Laptop", "Lenovo ThinkBook 14 G2 ARE"),
+    "20U9": ("Laptop", "Lenovo ThinkPad X1 Carbon Gen 8"),
+    "20XW": ("Laptop", "Lenovo ThinkPad X1 Carbon Gen 9"),
+    "21CB": ("Laptop", "Lenovo ThinkPad X1 Carbon Gen 10"),
+    "21AH": ("Laptop", "Lenovo ThinkPad T14 Gen 3"),
+    "20UD": ("Laptop", "Lenovo ThinkPad T14 Gen 1"),
+    "20W0": ("Laptop", "Lenovo ThinkPad T14 Gen 2"),
+    "20L7": ("Laptop", "Lenovo ThinkPad T480s"),
+    "20L5": ("Laptop", "Lenovo ThinkPad T480"),
+    "20N2": ("Laptop", "Lenovo ThinkPad T490"),
+    "10MR": ("Computer", "Lenovo ThinkCentre M710q Tiny"),
+    "10T7": ("Computer", "Lenovo ThinkCentre M720q Tiny"),
+    "11DT": ("Computer", "Lenovo ThinkCentre M70q Gen 1"),
+    "11MY": ("Computer", "Lenovo ThinkCentre M70q Gen 2"),
+    "11T3": ("Computer", "Lenovo ThinkCentre M70q Gen 3"),
+    "30E0": ("Computer", "Lenovo ThinkStation P340 Tiny"),
+    # Apple Hardware
+    "A2338": ("Laptop", "Apple MacBook Pro 13-inch (M1/M2)"),
+    "A2442": ("Laptop", "Apple MacBook Pro 14-inch (M1 Pro/Max)"),
+    "A2485": ("Laptop", "Apple MacBook Pro 16-inch (M1 Pro/Max)"),
+    "A2337": ("Laptop", "Apple MacBook Air (M1)"),
+    "A2681": ("Laptop", "Apple MacBook Air 13-inch (M2)"),
+    "A1993": ("Computer", "Apple Mac mini (2018)"),
+    "A2330": ("Computer", "Apple Mac mini (M1)"),
+    "A2686": ("Computer", "Apple Mac mini (M2)"),
+    "A2615": ("Computer", "Apple Mac Studio"),
+    "A2115": ("Computer", "Apple iMac 27-inch Retina 5K"),
+}
+
+def infer_hardware_from_barcode(code):
+    """
+    Infers Equipment Type and Item Description from barcode values,
+    manufacturer part numbers, and serial patterns.
+    """
+    if not code:
+        return None
+    raw_str = str(code).strip()
+    # Strip trailing option/regional codes like #ABA, #201, #B19, etc.
+    base_code = raw_str.split('#')[0].strip()
+    clean = re.sub(r'[^A-Z0-9]', '', base_code.upper())
+    if not clean:
+        return None
+
+    # 1. Exact catalog match
+    if clean in HARDWARE_CATALOG:
+        return HARDWARE_CATALOG[clean]
+
+    # 2. Lenovo 1S barcode format (e.g. 1S20VFPC1QLZMC)
+    if clean.startswith("1S") and len(clean) >= 14:
+        mach = clean[2:6]
+        if mach in HARDWARE_CATALOG:
+            return HARDWARE_CATALOG[mach]
+        if mach.startswith(('20', '21')):
+            return ("Laptop", f"Lenovo ThinkPad/ThinkBook ({mach})")
+        if mach.startswith(('10', '11', '12')):
+            return ("Computer", f"Lenovo ThinkCentre ({mach})")
+        if mach.startswith('30'):
+            return ("Computer", f"Lenovo ThinkStation ({mach})")
+
+    # 3. Dell PPID barcode (e.g. CN-0P2419-74261-89B-1234 or CN0P2419...)
+    if len(clean) >= 20 and clean[:2] in ('CN', 'KR', 'MX', 'JP', 'US', 'VN') and clean[2] == '0':
+        dell_pn = clean[3:8]
+        if dell_pn in HARDWARE_CATALOG:
+            return HARDWARE_CATALOG[dell_pn]
+        if re.match(r'^[PUESACDFW][0-9]{2}[0-9]{2}[A-Z]{0,2}$', dell_pn):
+            return ("Monitor", f"Dell Monitor ({dell_pn})")
+
+    # 4. HP Printer product number patterns (e.g. CE957A, CF284A, W1A53A)
+    if re.match(r'^[CDEGJKMQTVW1347][A-Z0-9]{1,3}[0-9]{2,3}[A-Z]$', clean) and len(clean) in (6, 7):
+        return ("Printer", f"HP LaserJet Printer ({clean})")
+
+    # 5. HP Printer serial format (10 chars, starts with factory country code)
+    if len(clean) == 10 and clean[:2] in ('CN', 'VN', 'MY', 'TH', 'SG', 'MX', 'CR', 'JP', 'US', 'PH'):
+        return ("Printer", "HP LaserJet Printer")
+
+    # 6. Brother Printer patterns (HL-..., MFC-..., DCP-..., QL-...)
+    if re.match(r'^(HL|MFC|DCP|QL)[0-9A-Z]+$', clean):
+        return ("Printer", f"Brother Printer ({clean})")
+
+    # 7. Zebra Label Printer patterns (ZD..., GX..., GK..., ZT..., LP...)
+    if re.match(r'^(ZD|GX|GK|ZT|LP|TLP)[0-9A-Z]+$', clean):
+        return ("Printer", f"Zebra Label Printer ({clean})")
+
+    # 8. Epson Printer patterns (ET-..., WF-..., XP-..., TM-...)
+    if re.match(r'^(ET|WF|XP|TM|LQ)[0-9A-Z]+$', clean):
+        return ("Printer", f"Epson Printer ({clean})")
+
+    # 9. Lexmark Printer patterns (MS..., MX..., CS..., CX...)
+    if re.match(r'^(MS|MX|CS|CX)[0-9]{3,4}[A-Z0-9]*$', clean):
+        return ("Printer", f"Lexmark Printer ({clean})")
+
+    # 10. Dell Monitor patterns (P2419H, U2419H, U2720Q, E2420H, S2721HS, etc.)
+    if re.match(r'^[PUESACDFW][0-9]{2}[0-9]{2}[A-Z]{0,3}$', clean) and len(clean) in (5, 6, 7):
+        return ("Monitor", f"Dell Monitor ({clean})")
+
+    # 11. Dell Dock patterns (WD15, WD19, WD19S, WD22, D6000, etc.)
+    if re.match(r'^(WD15|WD19|WD19S|WD19TB|WD19TBS|WD22TB4|D6000|TB16|DA300|DA310|HD22Q)$', clean):
+        return ("Docking Station", f"Dell Dock ({clean})")
+
+    # 12. Lenovo ThinkPad Dock machine types (40AY, 40AN, 40B0, etc.)
+    if re.match(r'^40[A-Z0-9]{2}$', clean):
+        return ("Docking Station", f"Lenovo ThinkPad Dock ({clean})")
+
+    # 13. Lenovo machine types without 1S prefix (e.g. 20VF, 11DT, 10MR)
+    if re.match(r'^(20|21)[A-Z0-9]{2}$', clean):
+        return ("Laptop", f"Lenovo ThinkPad/ThinkBook ({clean})")
+    if re.match(r'^(10|11|12)[A-Z0-9]{2}$', clean):
+        return ("Computer", f"Lenovo ThinkCentre ({clean})")
+    if re.match(r'^30[A-Z0-9]{2}$', clean):
+        return ("Computer", f"Lenovo ThinkStation ({clean})")
+
+    # 14. Cisco Network Switches
+    if re.match(r'^(WSC|C9200|C9300|C9500|SG[0-9]{3}|SF[0-9]{3})[A-Z0-9]*$', clean):
+        return ("Other", f"Cisco Switch ({clean})")
+
+    # 15. APC & Tripp Lite UPS
+    if re.match(r'^(SMT|SMX|SUA|BR|SURT)[0-9]{3,4}[A-Z0-9]*$', clean):
+        return ("Other", f"APC Smart-UPS ({clean})")
+
+    return None
+
+
 def lookup_snipe(term):
     """
     Looks up asset in Snipe-IT with connection pooling, null protection,
@@ -810,7 +996,7 @@ def api_ocr():
         seen = set()
 
         def register_candidate(val, label, confidence, is_verified=False):
-            clean = re.sub(r'[^A-Za-z0-9]', '', val).upper()
+            clean = re.sub(r'[^A-Za-z0-9]', '', str(val).split('#')[0]).upper()
             if not clean or len(clean) < 4 or clean in seen:
                 return
             seen.add(clean)
@@ -840,7 +1026,7 @@ def api_ocr():
                         register_candidate(last_seg, f"Barcode Serial ({b_type})", 100)
                         return True
 
-            clean_b = re.sub(r'[^A-Za-z0-9]', '', raw_data).upper()
+            clean_b = re.sub(r'[^A-Za-z0-9]', '', raw_data.split('#')[0]).upper()
             if not clean_b:
                 return False
 
@@ -851,7 +1037,10 @@ def api_ocr():
                 register_candidate(serial_part, f"Barcode Serial ({b_type})", 100, is_verified=True)
                 if len(type_part) >= 4:
                     fmt_type = f"{type_part[:4]}-{type_part[4:]}" if len(type_part) == 10 else type_part
-                    register_candidate(fmt_type, f"Barcode Model ({b_type})", 80)
+                    mach = type_part[:4]
+                    hw_info = HARDWARE_CATALOG.get(mach) or infer_hardware_from_barcode(mach)
+                    lbl = f"Barcode Model ({hw_info[1]})" if hw_info else f"Barcode Model ({b_type})"
+                    register_candidate(fmt_type, lbl, 85)
                 return True
 
             # Temple Asset Tag barcode (TU12345 or 5-7 digits)
@@ -859,9 +1048,38 @@ def api_ocr():
                 register_candidate(clean_b, f"Barcode Tag ({b_type})", 100, is_verified=True)
                 return True
 
+            # Dell PPID barcode (e.g. CN-0P2419-74261-89B-1234 or CN0P2419...)
+            if len(clean_b) >= 20 and clean_b[:2] in ('CN', 'KR', 'MX', 'JP', 'US', 'VN') and clean_b[2] == '0':
+                dell_pn = clean_b[3:8]
+                register_candidate(clean_b, f"Dell PPID ({b_type})", 92)
+                hw_info = infer_hardware_from_barcode(dell_pn)
+                lbl = f"Dell Model ({hw_info[1]})" if hw_info else f"Dell Part ({dell_pn})"
+                register_candidate(dell_pn, lbl, 85)
+                return True
+
+            # Hardware model vs serial classification
+            hw_match = infer_hardware_from_barcode(clean_b)
+            is_model_code = False
+            if clean_b in HARDWARE_CATALOG:
+                is_model_code = True
+            elif re.match(r'^[CDEGJKMQTVW1347][A-Z0-9]{1,3}[0-9]{2,3}[A-Z]$', clean_b) and len(clean_b) in (6, 7):
+                is_model_code = True
+            elif re.match(r'^(WD15|WD19|WD19S|WD19TB|WD19TBS|WD22TB4|D6000|TB16|DA300|DA310|HD22Q)$', clean_b):
+                is_model_code = True
+            elif re.match(r'^[PUESACDFW][0-9]{2}[0-9]{2}[A-Z]{0,3}$', clean_b) and len(clean_b) in (5, 6, 7):
+                is_model_code = True
+
+            if is_model_code and hw_match:
+                # Registered as model barcode (confidence 88 so serials take priority as primary if present)
+                register_candidate(clean_b, f"Barcode Model ({hw_match[1]})", 88)
+                return True
+
             # General hardware serial barcode
             if len(clean_b) >= 4:
-                register_candidate(clean_b, f"Barcode Serial ({b_type})", 95)
+                lbl = f"Barcode Serial ({b_type})"
+                if hw_match and hw_match[0] == "Printer":
+                    lbl = f"Printer Serial ({b_type})"
+                register_candidate(clean_b, lbl, 95)
                 # If starts with 'S' prefix followed by 6-12 chars (common in HP/Dell barcodes)
                 if clean_b.startswith("S") and len(clean_b) >= 7 and not clean_b[1].isdigit():
                     register_candidate(clean_b[1:], f"Barcode Serial ({b_type})", 92)
@@ -925,7 +1143,21 @@ def api_ocr():
                 "candidates": []
             }), 200
 
-        # --- STEP 3: Snipe-IT Ground-Truth Validation ---
+        # --- STEP 3: Hardware Inference from Candidates ---
+        inferred_type = None
+        inferred_desc = None
+        for cand in candidates:
+            c_val = cand.get("value") or cand.get("raw")
+            c_clean = re.sub(r'[^A-Z0-9]', '', str(c_val).split('#')[0].upper())
+            c_match = infer_hardware_from_barcode(c_clean)
+            if c_match:
+                if c_clean in HARDWARE_CATALOG:
+                    inferred_type, inferred_desc = c_match
+                    break
+                if not inferred_type:
+                    inferred_type, inferred_desc = c_match
+
+        # --- STEP 4: Snipe-IT Ground-Truth Validation ---
         verified_primary = None
         if SNIPE_URL and SNIPE_TOKEN and candidates:
             for cand in candidates[:5]:
@@ -937,19 +1169,26 @@ def api_ocr():
                     cand["verified"] = True
                     cand["label"] = f"{cand['label']} (✓ Verified in Snipe-IT)"
                     verified_primary = canonical_serial
+                    if snipe_match.get("Equipment Type"):
+                        inferred_type = snipe_match.get("Equipment Type")
+                    if snipe_match.get("Item Description"):
+                        inferred_desc = snipe_match.get("Item Description")
                     logging.info(f"[Barcode] Candidate {cand['raw']} VERIFIED against Snipe-IT as: {canonical_serial}")
                     break
 
         candidates.sort(key=lambda x: x["confidence"], reverse=True)
         primary = verified_primary or (candidates[0]["value"] if candidates else None)
 
-        logging.info(f"[Barcode Scan] Processed image -> Found {len(candidates)} barcode candidates. Primary: {primary}")
+        logging.info(f"[Barcode Scan] Processed image -> Found {len(candidates)} barcode candidates. Primary: {primary}, Inferred: {inferred_type} / {inferred_desc}")
 
         return jsonify({
             "success": True,
             "primary": primary,
             "candidates": candidates,
-            "raw_text": primary or ""
+            "raw_text": primary or "",
+            "inferred_type": inferred_type,
+            "inferred_desc": inferred_desc,
+            "auto_detected": bool(inferred_type)
         })
     except Exception as e:
         logging.error(f"[Barcode] Processing error: {e}", exc_info=True)
@@ -965,11 +1204,26 @@ def api_lookup():
 
     if res:
         res["found_in_snipe"] = True
+        res["auto_detected"] = False
         return jsonify(res)
 
     is_likely_tag = term.upper().startswith("CPH") or (
         term.isdigit() and len(term) < 8
     )
+
+    inferred = infer_hardware_from_barcode(term)
+    if inferred:
+        inferred_type, inferred_desc = inferred
+        return jsonify(
+            {
+                "Equipment Type": inferred_type,
+                "Item Description": inferred_desc,
+                "Serial Number": ("" if is_likely_tag else term),
+                "Temple Tag": format_temple_tag(term if is_likely_tag else ""),
+                "found_in_snipe": False,
+                "auto_detected": True,
+            }
+        )
 
     return jsonify(
         {
@@ -978,6 +1232,7 @@ def api_lookup():
             "Serial Number": ("" if is_likely_tag else term),
             "Temple Tag": format_temple_tag(term if is_likely_tag else ""),
             "found_in_snipe": False,
+            "auto_detected": False,
         }
     )
 
