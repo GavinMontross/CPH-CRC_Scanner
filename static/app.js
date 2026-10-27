@@ -9,164 +9,130 @@ window.fetch = async function(...args) {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Photo Scanner Elements (1-Tap Direct Camera & Library Upload)
+    const takePhotoBtn = document.getElementById('takePhotoBtn');
+    const cameraDirectInput = document.getElementById('cameraDirectInput');
+    const chooseLibraryBtn = document.getElementById('chooseLibraryBtn');
+    const libraryPhotoInput = document.getElementById('libraryPhotoInput');
+    const takePhotoTitle = document.getElementById('takePhotoTitle');
+    const takePhotoSub = document.getElementById('takePhotoSub');
+    const photoStatusBadge = document.getElementById('photoStatusBadge');
+
+    // Form & Manual Lookup Elements
     const scanInput = document.getElementById('scanInput');
     const manualLookupBtn = document.getElementById('manualLookupBtn');
     const statusBadge = document.getElementById('statusBadge');
     const detailsForm = document.getElementById('detailsForm');
-    const recentTableBody = document.querySelector('#recentTable tbody');
-    const fileListBody = document.getElementById('fileListBody');
-    const finalizeBtn = document.getElementById('finalizeBtn');
-    const clearBtn = document.getElementById('clearBtn');
+    const equipType = document.getElementById('equipType');
+    const itemDesc = document.getElementById('itemDesc');
+    const serialNum = document.getElementById('serialNum');
+    const templeTag = document.getElementById('templeTag');
     const clearFormBtn = document.getElementById('clearFormBtn');
-    const cameraScanBtn = document.getElementById('cameraScanBtn');
-    const cameraWrapper = document.getElementById('cameraWrapper');
-    const cameraRegion = document.getElementById('camera-region');
-    const batchCount = document.getElementById('batchCount');
+    const saveBtn = document.getElementById('saveBtn');
+
+    // Batch & Files Elements
+    const recentTableBody = document.querySelector('#recentTable tbody');
     const batchCountBadge = document.getElementById('batchCountBadge');
+    const batchTabBadge = document.getElementById('batchTabBadge');
+    const clearBtn = document.getElementById('clearBtn');
+    const finalizeBtn = document.getElementById('finalizeBtn');
+    const fileListBody = document.getElementById('fileListBody');
+    const refreshFilesBtn = document.getElementById('refreshFilesBtn');
+
+    // Candidates & Toast Elements
     const scanToast = document.getElementById('scanToast');
-
-    let html5QrCode = null;
-    let isScanning = false;
-    let nativeScanInterval = null;
-    let currentZoom = 1.0;
-    let isTorchOn = false;
-
-    const cameraControls = document.getElementById('cameraControls');
-    const zoomBtn = document.getElementById('zoomBtn');
-    const torchBtn = document.getElementById('torchBtn');
-    const ocrCaptureBtn = document.getElementById('ocrCaptureBtn');
-    const photoScanBtn = document.getElementById('photoScanBtn');
-    const cameraPhotoInput = document.getElementById('cameraPhotoInput');
-    const ocrAimGuide = document.getElementById('ocrAimGuide');
     const ocrCandidatesContainer = document.getElementById('ocrCandidatesContainer');
     const ocrCandidatesList = document.getElementById('ocrCandidatesList');
     const closeCandidatesBtn = document.getElementById('closeCandidatesBtn');
-    const closeCameraBtn = document.getElementById('closeCameraBtn');
 
-    if (closeCameraBtn) {
-        closeCameraBtn.addEventListener('click', stopCamera);
-    }
+    // Edit Modal Elements
+    const modalEl = document.getElementById('editItemModal');
+    let editModalInstance = null;
 
-    if (clearFormBtn) {
-        clearFormBtn.addEventListener('click', () => {
-            scanInput.value = '';
-            document.getElementById('equipType').value = '';
-            document.getElementById('itemDesc').value = '';
-            document.getElementById('serialNum').value = '';
-            document.getElementById('templeTag').value = '';
-            statusBadge.className = 'status-pill';
-            statusBadge.innerText = 'Ready to Scan';
-            if (ocrCandidatesContainer) ocrCandidatesContainer.style.display = 'none';
-            showToast('Form cleared');
+    // ==========================================
+    // 1-TAP PHOTO SCANNER (Direct Camera & Upload)
+    // ==========================================
+    if (takePhotoBtn && cameraDirectInput) {
+        takePhotoBtn.addEventListener('click', () => {
+            // Directly launches native camera on mobile with zero dialogs/prompts
+            cameraDirectInput.click();
+        });
+
+        cameraDirectInput.addEventListener('change', () => {
+            handlePhotoFile(cameraDirectInput);
         });
     }
 
-    if (closeCandidatesBtn && ocrCandidatesContainer) {
-        closeCandidatesBtn.addEventListener('click', () => {
-            ocrCandidatesContainer.style.display = 'none';
+    if (chooseLibraryBtn && libraryPhotoInput) {
+        chooseLibraryBtn.addEventListener('click', () => {
+            libraryPhotoInput.click();
+        });
+
+        libraryPhotoInput.addEventListener('change', () => {
+            handlePhotoFile(libraryPhotoInput);
         });
     }
 
-    if (ocrCaptureBtn) {
-        ocrCaptureBtn.addEventListener('click', captureAndProcessOcr);
-    }
+    async function handlePhotoFile(inputEl) {
+        const file = inputEl.files && inputEl.files[0];
+        if (!file) return;
 
-    if (photoScanBtn && cameraPhotoInput) {
-        photoScanBtn.addEventListener('click', () => {
-            cameraPhotoInput.click();
-        });
+        showToast("📸 Processing photo with OCR & Barcode engine...");
 
-        cameraPhotoInput.addEventListener('change', async () => {
-            const file = cameraPhotoInput.files && cameraPhotoInput.files[0];
-            if (!file) return;
-
-            showToast("📸 Processing photo with OCR...");
-            try {
-                const formData = new FormData();
-                formData.append('file', file);
-
-                const res = await fetch('ocr', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!res.ok) {
-                    throw new Error(`Server returned status ${res.status}`);
-                }
-
-                const data = await res.json();
-                processOcrResult(data);
-            } catch (err) {
-                console.error("Photo OCR error:", err);
-                showToast("Photo OCR failed: " + (err.message || "Error"), true);
-            } finally {
-                cameraPhotoInput.value = '';
-            }
-        });
-    }
-
-    async function captureAndProcessOcr() {
-        const video = cameraRegion.querySelector('video');
-        if (!video || !video.videoWidth) {
-            showToast("Camera stream not ready yet.", true);
-            return;
+        if (takePhotoBtn) {
+            takePhotoBtn.disabled = true;
+            if (takePhotoTitle) takePhotoTitle.textContent = "Analyzing Photo...";
+            if (takePhotoSub) takePhotoSub.textContent = "Extracting barcodes, serial numbers & tags";
         }
-
-        if (ocrCaptureBtn) {
-            ocrCaptureBtn.disabled = true;
-            ocrCaptureBtn.textContent = '⏳ Reading...';
+        if (photoStatusBadge) {
+            photoStatusBadge.style.display = 'inline';
+            photoStatusBadge.textContent = '⏳ Processing...';
         }
-        showToast("🔍 Reading text with OCR...");
 
         try {
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const formData = new FormData();
+            formData.append('file', file);
 
             const res = await fetch('ocr', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    image: canvas.toDataURL('image/jpeg', 0.90)
-                })
+                body: formData
             });
 
             if (!res.ok) {
-                throw new Error(`Server returned ${res.status}`);
+                throw new Error(`Server returned status ${res.status}`);
             }
 
             const data = await res.json();
             processOcrResult(data);
         } catch (err) {
-            console.error("OCR capture failed:", err);
-            showToast("OCR read failed: " + (err.message || "Network error"), true);
+            console.error("Photo scan error:", err);
+            showToast("Scan failed: " + (err.message || "Network error"), true);
         } finally {
-            if (ocrCaptureBtn) {
-                ocrCaptureBtn.disabled = false;
-                ocrCaptureBtn.textContent = '📸 Read Text';
+            inputEl.value = '';
+            if (takePhotoBtn) {
+                takePhotoBtn.disabled = false;
+                if (takePhotoTitle) takePhotoTitle.textContent = "Take Photo to Scan";
+                if (takePhotoSub) takePhotoSub.textContent = "Tap to open camera • Reads barcodes & serial text";
+            }
+            if (photoStatusBadge) {
+                photoStatusBadge.style.display = 'none';
             }
         }
     }
 
     function processOcrResult(data) {
         if (!data || !data.success) {
-            showToast(data?.error || "No text detected. Try closer or better lighting.", true);
+            showToast(data?.error || "No barcode or serial found. Try closer or brighter light.", true);
             return;
         }
 
         if (data.primary) {
-            if (navigator.vibrate) navigator.vibrate(100);
-            cameraRegion.classList.add('scan-flash');
-            setTimeout(() => cameraRegion.classList.remove('scan-flash'), 400);
-
+            if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
             showToast("✓ Detected: " + data.primary);
             scanInput.value = data.primary;
-            stopCamera();
             performLookup(data.primary);
         } else {
-            showToast("No serial / tag found in image. Try again.", true);
+            showToast("No equipment tag detected in image. Try again.", true);
         }
 
         renderCandidates(data.candidates || []);
@@ -208,300 +174,15 @@ document.addEventListener('DOMContentLoaded', () => {
         ocrCandidatesContainer.style.display = 'block';
     }
 
-    if (zoomBtn) {
-        zoomBtn.addEventListener('click', async () => {
-            if (!html5QrCode || !isScanning) return;
-            try {
-                const caps = html5QrCode.getRunningTrackCapabilities() || {};
-                const maxZ = (caps.zoom && caps.zoom.max) || 2.0;
-                currentZoom = currentZoom <= 1.0 ? Math.min(2.5, maxZ) : 1.0;
-                await html5QrCode.applyVideoConstraints({ advanced: [{ zoom: currentZoom }] });
-                zoomBtn.textContent = currentZoom > 1.0 ? '🔍 1x' : '🔍 2x';
-                zoomBtn.classList.toggle('active-state', currentZoom > 1.0);
-            } catch (e) {
-                console.warn('Zoom failed:', e);
-            }
+    if (closeCandidatesBtn && ocrCandidatesContainer) {
+        closeCandidatesBtn.addEventListener('click', () => {
+            ocrCandidatesContainer.style.display = 'none';
         });
     }
 
-    if (torchBtn) {
-        torchBtn.addEventListener('click', async () => {
-            if (!html5QrCode || !isScanning) return;
-            try {
-                isTorchOn = !isTorchOn;
-                await html5QrCode.applyVideoConstraints({ advanced: [{ torch: isTorchOn }] });
-                torchBtn.textContent = isTorchOn ? '🔦 Off' : '🔦 Light';
-                torchBtn.classList.toggle('active-state', isTorchOn);
-            } catch (e) {
-                console.warn('Torch failed:', e);
-            }
-        });
-    }
-
-    loadRecent();
-    loadCompletedFiles();
-
-    // ========================
-    // MOBILE TAB NAVIGATION
-    // ========================
-    const mobileTabs = document.getElementById('mobileTabs');
-    if (mobileTabs) {
-        mobileTabs.querySelectorAll('button').forEach(btn => {
-            btn.addEventListener('click', () => {
-                // Deactivate all tabs
-                mobileTabs.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-                document.querySelectorAll('.tab-content-section').forEach(s => s.classList.remove('active'));
-
-                // Activate clicked tab
-                btn.classList.add('active');
-                const target = document.getElementById(btn.dataset.tab);
-                if (target) target.classList.add('active');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            });
-        });
-    }
-
-    // ========================
-    // TOAST NOTIFICATION
-    // ========================
-    function showToast(message, isError = false) {
-        scanToast.textContent = message;
-        scanToast.className = 'scan-toast show' + (isError ? ' error' : '');
-        setTimeout(() => { scanToast.className = 'scan-toast'; }, 2000);
-    }
-
-    // ========================
-    // CAMERA SCANNER (html5-qrcode)
-    // Supports: QR, Code128, Code39, EAN-13, EAN-8, UPC-A, UPC-E, ITF, etc.
-    // ========================
-    cameraScanBtn.addEventListener('click', async () => {
-        if (isScanning) {
-            await stopCamera();
-        } else {
-            startCamera();
-        }
-    });
-
-    // Auto-restart camera with new format filters if user changes mode during scan
-    document.querySelectorAll('input[name="scanMode"]').forEach(radio => {
-        radio.addEventListener('change', async () => {
-            if (isScanning) {
-                await stopCamera();
-                startCamera();
-            }
-        });
-    });
-
-    function startCamera() {
-        if (cameraWrapper) {
-            cameraWrapper.style.display = 'block';
-            cameraWrapper.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-        cameraRegion.style.display = 'block';
-        cameraScanBtn.textContent = '⏹ Stop Camera';
-        cameraScanBtn.classList.add('scanning');
-        isScanning = true;
-
-        const mode = document.querySelector('input[name="scanMode"]:checked')?.value || 'ocr';
-
-        let formatsToSupport;
-        let qrboxFn;
-
-        if (mode === 'ocr') {
-            // Text / OCR Mode: Wide centered rectangle for serial numbers & barcodes
-            formatsToSupport = [Html5QrcodeSupportedFormats.QR_CODE];
-            qrboxFn = function(viewfinderWidth, viewfinderHeight) {
-                const width = Math.min(Math.floor(viewfinderWidth * 0.88), 460);
-                const height = Math.min(Math.floor(viewfinderHeight * 0.58), 180);
-                return { width, height };
-            };
-        } else {
-            // QR Mode: 2D asset tags (Temple QR, Data Matrix)
-            formatsToSupport = [
-                Html5QrcodeSupportedFormats.QR_CODE,
-                Html5QrcodeSupportedFormats.DATA_MATRIX
-            ];
-            qrboxFn = function(viewfinderWidth, viewfinderHeight) {
-                const minDim = Math.min(viewfinderWidth, viewfinderHeight);
-                const size = Math.floor(minDim * 0.70);
-                return { width: size, height: size };
-            };
-        }
-
-        html5QrCode = new Html5Qrcode("camera-region", {
-            formatsToSupport: formatsToSupport,
-            verbose: false
-        });
-
-        const config = {
-            fps: 10,
-            qrbox: qrboxFn,
-            disableFlip: false
-        };
-
-        // html5-qrcode strictly requires cameraIdOrConfig to have EXACTLY 1 key: facingMode
-        html5QrCode.start(
-            { facingMode: "environment" },
-            config,
-            onScanSuccess,
-            onScanFailure
-        ).then(async () => {
-            // Hardware capabilities (Zoom & Torch)
-            let caps = {};
-            try {
-                caps = html5QrCode.getRunningTrackCapabilities() || {};
-            } catch (e) {}
-
-            let hasControls = false;
-            if (caps.zoom && caps.zoom.max > 1.0) {
-                zoomBtn.style.display = 'inline-flex';
-                zoomBtn.textContent = '🔍 2x';
-                zoomBtn.className = 'btn btn-dark-overlay';
-                currentZoom = 1.0;
-                hasControls = true;
-            } else {
-                zoomBtn.style.display = 'none';
-            }
-
-            if (caps.torch) {
-                torchBtn.style.display = 'inline-flex';
-                torchBtn.textContent = '🔦 Light';
-                torchBtn.className = 'btn btn-dark-overlay';
-                isTorchOn = false;
-                hasControls = true;
-            } else {
-                torchBtn.style.display = 'none';
-            }
-
-            // In OCR mode: show OCR capture button and top aiming guide
-            if (mode === 'ocr') {
-                if (ocrCaptureBtn) ocrCaptureBtn.style.display = 'inline-flex';
-                if (ocrAimGuide) {
-                    ocrAimGuide.style.display = 'block';
-                    ocrAimGuide.textContent = '🎯 Center label & tap Read Text';
-                }
-                hasControls = true;
-            } else {
-                if (ocrCaptureBtn) ocrCaptureBtn.style.display = 'none';
-                if (ocrAimGuide) ocrAimGuide.style.display = 'none';
-            }
-
-            if (hasControls && cameraControls) {
-                cameraControls.style.display = 'flex';
-            }
-
-            // High-Resolution Native BarcodeDetector for QR mode
-            if (mode === 'qr' && 'BarcodeDetector' in window) {
-                try {
-                    const supportedFormats = await BarcodeDetector.getSupportedFormats();
-                    const desiredFormats = ['qr_code', 'data_matrix'];
-                    const finalFormats = desiredFormats.filter(f => supportedFormats.includes(f));
-
-                    if (finalFormats.length > 0) {
-                        const detector = new BarcodeDetector({ formats: finalFormats });
-                        const videoEl = cameraRegion.querySelector('video');
-                        if (videoEl) {
-                            if (nativeScanInterval) clearInterval(nativeScanInterval);
-                            nativeScanInterval = setInterval(async () => {
-                                if (!isScanning || videoEl.readyState < 2) return;
-                                try {
-                                    const results = await detector.detect(videoEl);
-                                    if (results && results.length > 0) {
-                                        const raw = results[0].rawValue;
-                                        if (raw) {
-                                            clearInterval(nativeScanInterval);
-                                            onScanSuccess(raw);
-                                        }
-                                    }
-                                } catch (detErr) {}
-                            }, 100);
-                        }
-                    }
-                } catch (bErr) {
-                    console.warn('Native BarcodeDetector not available:', bErr);
-                }
-            }
-        }).catch(err => {
-            console.error("Camera start error:", err);
-            showToast("Camera error: " + (err.name || err.message || "access denied"), true);
-            stopCamera();
-        });
-    }
-
-    async function stopCamera() {
-        if (nativeScanInterval) {
-            clearInterval(nativeScanInterval);
-            nativeScanInterval = null;
-        }
-        if (cameraControls) {
-            cameraControls.style.display = 'none';
-        }
-        if (html5QrCode) {
-            try {
-                await html5QrCode.stop();
-                html5QrCode.clear();
-            } catch (err) {
-                console.warn("Camera stop error:", err);
-            }
-            html5QrCode = null;
-        }
-        if (ocrAimGuide) ocrAimGuide.style.display = 'none';
-
-        if (cameraWrapper) cameraWrapper.style.display = 'none';
-        cameraRegion.style.display = 'none';
-        cameraScanBtn.textContent = '📹 Live Camera';
-        cameraScanBtn.classList.remove('scanning');
-        isScanning = false;
-    }
-
-    let lastScanTime = 0;
-    const SCAN_COOLDOWN_MS = 2000; // Prevent rapid duplicate scans
-
-    function sanitizeScannedText(text) {
-        let clean = (text || '').trim();
-        // Extract serial if user accidentally scanned a Lenovo support QR URL
-        if (clean.toLowerCase().includes('lenovo.com') || clean.toLowerCase().includes('pcsupport')) {
-            const parts = clean.split('/').filter(p => p.length > 0);
-            if (parts.length > 0) {
-                const candidate = parts[parts.length - 1].split('?')[0].split('#')[0];
-                if (candidate.length >= 6 && candidate.length <= 14) {
-                    return candidate.toUpperCase();
-                }
-            }
-        }
-        return clean;
-    }
-
-    function onScanSuccess(decodedText, decodedResult) {
-        const now = Date.now();
-        if (now - lastScanTime < SCAN_COOLDOWN_MS) return;
-        lastScanTime = now;
-
-        const targetCode = sanitizeScannedText(decodedText);
-
-        // Haptic feedback on supported devices
-        if (navigator.vibrate) navigator.vibrate(100);
-
-        // Flash the scan region
-        cameraRegion.classList.add('scan-flash');
-        setTimeout(() => cameraRegion.classList.remove('scan-flash'), 400);
-
-        showToast('Scanned: ' + targetCode);
-
-        // Stop camera after successful scan
-        stopCamera();
-
-        // Trigger lookup
-        performLookup(targetCode);
-    }
-
-    function onScanFailure(error) {
-        // Silence — this fires constantly when no code is in view
-    }
-
-    // ========================
-    // MANUAL INPUT / KEYBOARD SCANNER
-    // ========================
+    // ==========================================
+    // MANUAL LOOKUP / KEYBOARD SEARCH
+    // ==========================================
     scanInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
@@ -519,9 +200,6 @@ document.addEventListener('DOMContentLoaded', () => {
         performLookup(term);
     }
 
-    // ========================
-    // LOOKUP (shared by camera and manual)
-    // ========================
     async function performLookup(term) {
         statusBadge.className = 'status-pill bg-warning text-dark';
         statusBadge.innerText = 'Searching Snipe...';
@@ -536,54 +214,54 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!res.ok) throw new Error("Server Error: " + res.status);
             const data = await res.json();
 
-            // Fill fields
-            document.getElementById('equipType').value = data['Equipment Type'] || '';
-            document.getElementById('itemDesc').value = data['Item Description'] || '';
-            document.getElementById('serialNum').value = data['Serial Number'] || '';
-            document.getElementById('templeTag').value = data['Temple Tag'] || '';
+            // Auto-fill form fields
+            equipType.value = data['Equipment Type'] || '';
+            itemDesc.value = data['Item Description'] || '';
+            serialNum.value = data['Serial Number'] || '';
+            templeTag.value = data['Temple Tag'] || '';
             scanInput.value = term;
 
-            // Status
+            // Status Badge
             if (data.found_in_snipe) {
                 statusBadge.className = 'status-pill bg-success text-white';
                 statusBadge.innerText = '✓ Found in Snipe-IT';
             } else {
                 statusBadge.className = 'status-pill bg-danger text-white';
-                statusBadge.innerText = '✗ Not Found - Verify Info';
+                statusBadge.innerText = '✗ Not in Snipe-IT (Manual)';
             }
 
-            // Focus strategy — on mobile, don't auto-focus inputs (avoids keyboard popup)
+            // Focus strategy on desktop
             if (window.innerWidth >= 768) {
-                if (!document.getElementById('serialNum').value) {
-                    document.getElementById('serialNum').focus();
+                if (!serialNum.value) {
+                    serialNum.focus();
                 } else {
-                    document.getElementById('saveBtn').focus();
+                    saveBtn.focus();
                 }
             }
-
         } catch (err) {
-            console.error(err);
-            statusBadge.className = 'badge bg-danger';
+            console.error("Lookup error:", err);
+            statusBadge.className = 'status-pill bg-danger text-white';
             statusBadge.innerText = 'Error';
             showToast('Lookup failed', true);
         }
     }
 
-    // ========================
-    // SAVE / ADD TO BATCH
-    // ========================
+    // ==========================================
+    // DETAILS FORM (ADD TO BATCH & CLEAR)
+    // ==========================================
     detailsForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
         const payload = {
-            "Equipment Type": document.getElementById('equipType').value,
-            "Item Description": document.getElementById('itemDesc').value,
-            "Serial Number": document.getElementById('serialNum').value,
-            "Temple Tag": document.getElementById('templeTag').value
+            "Equipment Type": equipType.value.trim(),
+            "Item Description": itemDesc.value.trim(),
+            "Serial Number": serialNum.value.trim(),
+            "Temple Tag": templeTag.value.trim()
         };
 
         if (!payload['Serial Number']) {
             showToast('Serial Number is required!', true);
+            serialNum.focus();
             return;
         }
 
@@ -598,40 +276,50 @@ document.addEventListener('DOMContentLoaded', () => {
             if (result.ok) {
                 // Clear fields
                 scanInput.value = '';
-                document.getElementById('equipType').value = '';
-                document.getElementById('itemDesc').value = '';
-                document.getElementById('serialNum').value = '';
-                document.getElementById('templeTag').value = '';
+                equipType.value = '';
+                itemDesc.value = '';
+                serialNum.value = '';
+                templeTag.value = '';
 
-                statusBadge.className = 'badge bg-success';
-                statusBadge.innerText = '✓ Added!';
+                statusBadge.className = 'status-pill bg-success text-white';
+                statusBadge.innerText = '✓ Added to Batch';
                 showToast('Added to batch');
 
-                // Haptic
                 if (navigator.vibrate) navigator.vibrate(50);
-
                 loadRecent();
 
-                // Reset status after a moment
                 setTimeout(() => {
-                    statusBadge.className = 'badge bg-secondary';
+                    statusBadge.className = 'status-pill';
                     statusBadge.innerText = 'Ready to Scan';
                 }, 1500);
-
             } else {
                 showToast('Error: ' + result.error, true);
-                statusBadge.className = 'badge bg-danger';
+                statusBadge.className = 'status-pill bg-danger text-white';
                 statusBadge.innerText = result.error;
             }
         } catch (err) {
-            console.error(err);
+            console.error("Add item error:", err);
             showToast('Network Error', true);
         }
     });
 
-    // ========================
-    // RESET BATCH
-    // ========================
+    if (clearFormBtn) {
+        clearFormBtn.addEventListener('click', () => {
+            scanInput.value = '';
+            equipType.value = '';
+            itemDesc.value = '';
+            serialNum.value = '';
+            templeTag.value = '';
+            statusBadge.className = 'status-pill';
+            statusBadge.innerText = 'Ready to Scan';
+            if (ocrCandidatesContainer) ocrCandidatesContainer.style.display = 'none';
+            showToast('Form cleared');
+        });
+    }
+
+    // ==========================================
+    // BATCH MANAGEMENT (RESET & FINALIZE)
+    // ==========================================
     clearBtn.addEventListener('click', async () => {
         if (!confirm("⚠️ WARNING: This will DELETE all items in the current batch.\n\nAre you sure you want to start over?")) {
             return;
@@ -641,13 +329,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('reset_batch', { method: 'POST' });
             if (res.ok) {
                 recentTableBody.innerHTML = '';
-                document.getElementById('equipType').value = '';
-                document.getElementById('itemDesc').value = '';
-                document.getElementById('serialNum').value = '';
-                document.getElementById('templeTag').value = '';
+                equipType.value = '';
+                itemDesc.value = '';
+                serialNum.value = '';
+                templeTag.value = '';
                 scanInput.value = '';
 
-                statusBadge.className = 'badge bg-secondary';
+                statusBadge.className = 'status-pill';
                 statusBadge.innerText = 'Batch Reset';
                 showToast('Batch cleared');
                 loadRecent();
@@ -655,14 +343,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast('Error resetting batch', true);
             }
         } catch (err) {
-            console.error(err);
+            console.error("Reset batch error:", err);
             showToast('Network Error', true);
         }
     });
 
-    // ========================
-    // FINALIZE BATCH
-    // ========================
     finalizeBtn.addEventListener('click', async () => {
         if (!confirm("Finalize this batch? This will create the Excel file for CRC.")) return;
         try {
@@ -671,18 +356,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.ok) {
                 loadRecent();
                 loadCompletedFiles();
-                showToast('Saved: ' + data.filename);
+                showToast('Batch finalized: ' + data.filename);
             } else {
-                showToast(data.error, true);
+                showToast(data.error || 'Failed to finalize batch', true);
             }
         } catch (err) {
             showToast('Network Error', true);
         }
     });
 
-    // ========================
+    // ==========================================
     // ROW ACTIONS (EDIT & DELETE)
-    // ========================
+    // ==========================================
     async function deleteRow(serial) {
         if (!confirm(`Remove serial "${serial}" from this batch?`)) return;
 
@@ -697,22 +382,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast('Deleted');
                 loadRecent();
             } else {
-                showToast('Failed to delete', true);
+                showToast('Failed to delete item', true);
             }
         } catch (err) {
-            console.error(err);
+            console.error("Delete row error:", err);
+            showToast('Network error deleting item', true);
         }
     }
 
-    let editModalInstance = null;
     function promptEditRow(oldType, oldDesc, oldSerial, oldTag) {
-        const modalEl = document.getElementById('editItemModal');
         if (modalEl && window.bootstrap) {
             document.getElementById('editOldSerial').value = oldSerial;
             document.getElementById('editEquipType').value = oldType;
             document.getElementById('editItemDesc').value = oldDesc;
             document.getElementById('editSerialNum').value = oldSerial;
             document.getElementById('editTempleTag').value = oldTag;
+
             if (!editModalInstance) {
                 editModalInstance = new bootstrap.Modal(modalEl);
             }
@@ -764,31 +449,25 @@ document.addEventListener('DOMContentLoaded', () => {
                     showToast('Failed to update', true);
                 }
             } catch (err) {
-                console.error(err);
+                console.error("Edit modal error:", err);
                 showToast('Network error updating item', true);
             }
         });
     }
 
-    // ========================
-    // HELPERS
-    // ========================
+    // ==========================================
+    // RECENT BATCH ITEMS & COMPLETED FILES
+    // ==========================================
     async function loadRecent() {
         try {
             const res = await fetch('recent');
             const data = await res.json();
             recentTableBody.innerHTML = '';
 
-            // Update batch count & mobile bottom tab badge
             const count = (data.items || []).length;
-            if (batchCount) {
-                batchCount.textContent = count > 0 ? `${count} item${count !== 1 ? 's' : ''} scanned` : 'No items yet';
-            }
-            const batchCountBadge = document.getElementById('batchCountBadge');
             if (batchCountBadge) {
                 batchCountBadge.textContent = count === 1 ? '1 item' : `${count} items`;
             }
-            const batchTabBadge = document.getElementById('batchTabBadge');
             if (batchTabBadge) {
                 batchTabBadge.textContent = count;
                 batchTabBadge.style.display = count > 0 ? 'inline-block' : 'none';
@@ -803,7 +482,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             data.items.forEach(row => {
                 const tr = document.createElement('tr');
-
                 const type = row[0] || "";
                 const desc = row[1] || "";
                 const serial = row[2] || "";
@@ -816,7 +494,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${escapeHtml(tag)}</td>
                 `;
 
-                // Actions column
                 const actionsTd = document.createElement('td');
                 actionsTd.className = "text-end text-nowrap";
 
@@ -874,11 +551,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    const refreshFilesBtn = document.getElementById('refreshFilesBtn');
     if (refreshFilesBtn) {
         refreshFilesBtn.addEventListener('click', loadCompletedFiles);
     }
     window.loadCompletedFiles = loadCompletedFiles;
+
+    // ==========================================
+    // MOBILE BOTTOM TAB NAVIGATION
+    // ==========================================
+    const mobileTabs = document.getElementById('mobileTabs');
+    if (mobileTabs) {
+        mobileTabs.querySelectorAll('button').forEach(btn => {
+            btn.addEventListener('click', () => {
+                mobileTabs.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content-section').forEach(s => s.classList.remove('active'));
+
+                btn.classList.add('active');
+                const target = document.getElementById(btn.dataset.tab);
+                if (target) target.classList.add('active');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            });
+        });
+    }
+
+    // ==========================================
+    // TOAST NOTIFICATION
+    // ==========================================
+    function showToast(message, isError = false) {
+        scanToast.textContent = message;
+        scanToast.className = 'scan-toast show' + (isError ? ' error' : '');
+        setTimeout(() => { scanToast.className = 'scan-toast'; }, 2200);
+    }
 
     // Prevent XSS in table cells
     function escapeHtml(str) {
@@ -886,4 +589,8 @@ document.addEventListener('DOMContentLoaded', () => {
         div.textContent = str;
         return div.innerHTML;
     }
+
+    // Initial Load
+    loadRecent();
+    loadCompletedFiles();
 });
