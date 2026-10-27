@@ -9,6 +9,8 @@ import threading
 import logging
 import shutil
 from datetime import datetime, timedelta
+import io
+import re
 from flask import (
     Flask,
     request,
@@ -23,6 +25,14 @@ import requests
 from dotenv import load_dotenv
 from openpyxl import load_workbook, Workbook
 from openpyxl.utils import get_column_letter
+
+try:
+    import pytesseract
+    from PIL import Image, ImageEnhance, ImageOps
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+
 
 load_dotenv()
 
@@ -363,6 +373,7 @@ def check_sso_authentication():
         or request.headers.get("X-Requested-With") == "XMLHttpRequest"
         or request.path.startswith(
             (
+                "/ocr",
                 "/lookup",
                 "/add",
                 "/recent",
@@ -563,6 +574,170 @@ def index():
         user_context = dict(user)
         user_context["photo"] = USER_PHOTOS.get(user.get("email"))
     return render_template("index.html", user=user_context)
+
+
+def parse_equipment_text(raw_text):
+    candidates = []
+    seen = set()
+
+    def add_candidate(val, label, confidence):
+        clean = re.sub(r'[^A-Za-z0-9]', '', val).upper()
+        if not clean or len(clean) < 4 or len(clean) > 24:
+            return
+        if clean in seen:
+            return
+        seen.add(clean)
+        candidates.append({
+            "value": clean,
+            "label": label,
+            "confidence": confidence
+        })
+
+    lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
+
+    # 1. High confidence pattern recognition
+    for line in lines:
+        # Lenovo 1S barcode string (e.g. 1S10MQ000JUSMJ06F3K2 -> serial is MJ06F3K2)
+        m_1s = re.search(r'1S[A-Za-z0-9]{4,16}([A-Za-z0-9]{8})\b', line, re.I)
+        if m_1s:
+            add_candidate(m_1s.group(1), "Lenovo Serial", 95)
+
+        # S/N, SIN, or Serial Number (handles OCR misreading slash as I/1)
+        m_sn = re.search(r'(?:S[I/1|l]?N|Serial(?:\s*No\.?|\s*Number)?)(?:\s*\([^)]*\))?\s*[:#\s.-]*\s*([A-Za-z0-9]{6,14})\b', line, re.I)
+        if m_sn:
+            add_candidate(m_sn.group(1), "Serial Number", 92)
+
+        # Dell Service Tag
+        m_st = re.search(r'(?:Service\s*Tag|S/?T)(?:\s*\([^)]*\))?\s*[:#\s.-]*\s*([A-Za-z0-9]{7})\b', line, re.I)
+        if m_st:
+            add_candidate(m_st.group(1), "Dell Service Tag", 92)
+
+        # Temple Asset Tag (TU123456 or Asset Tag: 123456)
+        m_tu = re.search(r'\b(TU\d{5,7})\b', line, re.I)
+        if m_tu:
+            add_candidate(m_tu.group(1), "Temple Asset Tag", 90)
+
+        m_asset = re.search(r'(?:Asset\s*Tag|Tag(?:\s*No\.?)?)(?:\s*\([^)]*\))?\s*[:#\s.-]*\s*([A-Za-z0-9]{5,10})\b', line, re.I)
+        if m_asset:
+            add_candidate(m_asset.group(1), "Asset Tag", 85)
+
+        # MAC Address
+        m_mac = re.search(r'(?:MAC|LAN)\s*[:#\s-]*\s*([0-9A-Fa-f]{12})\b', line, re.I)
+        if m_mac:
+            add_candidate(m_mac.group(1), "MAC Address", 70)
+
+    # 2. Standalone alphanumeric tokens that look like serials (6 to 12 chars)
+    for token in re.findall(r'\b[A-Za-z0-9]{6,12}\b', raw_text):
+        token_upper = token.upper()
+        if token_upper in {
+            "SERIAL", "NUMBER", "SERVICETAG", "MODEL", "LENOVO", "TEMPLE", 
+            "TEMPLEU", "UNIVERSITY", "EXPRESS", "OPTIPLEX", "THINKCENTRE",
+            "PRODUCT", "SYSTEM", "DESKTOP", "LAPTOP", "COMPUTER"
+        }:
+            continue
+        has_letter = any(c.isalpha() for c in token_upper)
+        has_digit = any(c.isdigit() for c in token_upper)
+        if has_letter and has_digit:
+            add_candidate(token_upper, "Alphanumeric Code", 60)
+        elif token_upper.isdigit() and len(token_upper) in (5, 6, 7):
+            add_candidate(token_upper, "Numeric Tag", 55)
+
+    candidates.sort(key=lambda x: x["confidence"], reverse=True)
+    primary = candidates[0]["value"] if candidates else None
+
+    return {
+        "primary": primary,
+        "candidates": candidates,
+        "raw_text": raw_text
+    }
+
+
+@app.route("/ocr", methods=["POST"])
+def api_ocr():
+    if not OCR_AVAILABLE:
+        return jsonify({
+            "error": "OCR engine is not installed on this server. Please ensure tesseract-ocr and pytesseract are available.",
+            "success": False
+        }), 500
+
+    img_data = None
+    crop_info = None
+
+    if "file" in request.files:
+        img_data = request.files["file"].read()
+        crop_raw = request.form.get("crop")
+        if crop_raw:
+            try:
+                crop_info = json.loads(crop_raw)
+            except:
+                pass
+    elif request.is_json and "image" in request.json:
+        raw_b64 = request.json["image"]
+        crop_info = request.json.get("crop")
+        if "," in raw_b64:
+            raw_b64 = raw_b64.split(",", 1)[1]
+        try:
+            img_data = base64.b64decode(raw_b64)
+        except Exception as e:
+            return jsonify({"error": f"Invalid base64 image data: {str(e)}", "success": False}), 400
+    else:
+        return jsonify({
+            "error": "No image provided. Please send a file upload or base64 JSON.",
+            "success": False
+        }), 400
+
+    try:
+        image = Image.open(io.BytesIO(img_data))
+        image = ImageOps.exif_transpose(image)
+
+        # Optional crop to focused camera viewfinder region
+        if crop_info and isinstance(crop_info, dict):
+            w, h = image.size
+            if crop_info.get("normalized", False):
+                left = int(crop_info.get("x", 0) * w)
+                top = int(crop_info.get("y", 0) * h)
+                right = int((crop_info.get("x", 0) + crop_info.get("width", 1)) * w)
+                bottom = int((crop_info.get("y", 0) + crop_info.get("height", 1)) * h)
+            else:
+                left = int(crop_info.get("x", 0))
+                top = int(crop_info.get("y", 0))
+                right = left + int(crop_info.get("width", w))
+                bottom = top + int(crop_info.get("height", h))
+            image = image.crop((max(0, left), max(0, top), min(w, right), min(h, bottom)))
+
+        # Preprocessing: convert to grayscale and upscale if small
+        gray = image.convert("L")
+        if gray.width < 1000:
+            scale = 1000.0 / gray.width
+            gray = gray.resize((int(gray.width * scale), int(gray.height * scale)), Image.Resampling.LANCZOS)
+
+        # Contrast enhancement for sharp text edges
+        enhancer = ImageEnhance.Contrast(gray)
+        enhanced = enhancer.enhance(1.8)
+
+        # Run OCR with block segmentation
+        raw_text = pytesseract.image_to_string(enhanced, config="--oem 3 --psm 6")
+        parsed = parse_equipment_text(raw_text)
+
+        # If no confident match found, fallback to sparse text analysis
+        if not parsed["primary"]:
+            sparse_text = pytesseract.image_to_string(enhanced, config="--oem 3 --psm 11")
+            parsed_sparse = parse_equipment_text(sparse_text)
+            if parsed_sparse["primary"]:
+                parsed = parsed_sparse
+                raw_text = (raw_text + "\n" + sparse_text).strip()
+
+        logging.info(f"[OCR] Extracted text ({len(raw_text)} chars) -> Primary match: {parsed['primary']} (found {len(parsed['candidates'])} candidates)")
+
+        return jsonify({
+            "success": True,
+            "primary": parsed["primary"],
+            "candidates": parsed["candidates"],
+            "raw_text": raw_text
+        })
+    except Exception as e:
+        logging.error(f"[OCR] Processing error: {e}", exc_info=True)
+        return jsonify({"error": f"OCR processing failed: {str(e)}", "success": False}), 500
 
 
 @app.route("/lookup", methods=["POST"])

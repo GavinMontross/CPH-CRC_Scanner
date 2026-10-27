@@ -278,6 +278,34 @@
             padding: 0.4rem 0.5rem;
         }
 
+        /* OCR targeting bracket inside viewfinder */
+        .ocr-reticle {
+            position: absolute;
+            top: 20%;
+            left: 5%;
+            width: 90%;
+            height: 60%;
+            border: 2px dashed rgba(157, 34, 53, 0.85);
+            border-radius: 8px;
+            pointer-events: none;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 0 12px rgba(157, 34, 53, 0.25) inset;
+        }
+
+        .ocr-reticle-label {
+            background: rgba(157, 34, 53, 0.85);
+            color: #fff;
+            font-size: 0.72rem;
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
         /* Haptic-style flash on scan success */
         .scan-flash {
             animation: flashGreen 0.4s ease-out;
@@ -361,39 +389,59 @@
 
                         <!-- Scan Mode Switcher -->
                         <div class="btn-group w-100 mb-2 scan-mode-pills" role="group">
-                            <input type="radio" class="btn-check" name="scanMode" id="modeBarcode" value="barcode" checked>
-                            <label class="btn btn-outline-secondary" for="modeBarcode">📊 Barcode (Serial)</label>
+                            <input type="radio" class="btn-check" name="scanMode" id="modeOcr" value="ocr" checked>
+                            <label class="btn btn-outline-secondary" for="modeOcr">📝 Text (OCR)</label>
+
+                            <input type="radio" class="btn-check" name="scanMode" id="modeBarcode" value="barcode">
+                            <label class="btn btn-outline-secondary" for="modeBarcode">📊 Barcode</label>
 
                             <input type="radio" class="btn-check" name="scanMode" id="modeQr" value="qr">
-                            <label class="btn btn-outline-secondary" for="modeQr">📱 QR Code (Tag)</label>
+                            <label class="btn btn-outline-secondary" for="modeQr">📱 QR Code</label>
 
                             <input type="radio" class="btn-check" name="scanMode" id="modeBoth" value="both">
                             <label class="btn btn-outline-secondary" for="modeBoth">⚡ Both</label>
                         </div>
 
-                        <!-- Camera scan button -->
+                        <!-- Camera Action Buttons -->
                         <div class="scan-btn-group">
-                            <button id="cameraScanBtn" class="btn">📷 Tap to Scan</button>
+                            <button id="cameraScanBtn" class="btn">📹 Live Camera</button>
+                            <button type="button" id="photoScanBtn" class="btn btn-outline-dark fw-bold">📸 Apple Photo / Scan</button>
+                            <input type="file" id="cameraPhotoInput" accept="image/*" capture="environment" style="display:none;">
+                        </div>
+
+                        <!-- Camera Aiming Helper / Guide -->
+                        <div id="ocrAimGuide" class="text-center small py-1 px-2 rounded mb-2 bg-light text-muted border" style="display:none;">
+                            🎯 <strong>Text OCR Mode:</strong> Center serial or label in the box and tap <strong>"📸 Read Text"</strong>.
                         </div>
 
                         <!-- Camera viewfinder -->
                         <div id="camera-region" style="display:none; margin-bottom:0.5rem;"></div>
 
-                        <!-- Camera Quick Controls (Zoom / Torch) -->
+                        <!-- Camera Quick Controls (Read Text / Zoom / Torch) -->
                         <div id="cameraControls" class="justify-content-center gap-2 mb-3" style="display:none;">
+                            <button type="button" id="ocrCaptureBtn" class="btn btn-sm btn-temple px-3 fw-bold">📸 Read Text</button>
                             <button type="button" id="zoomBtn" class="btn btn-sm btn-outline-secondary px-3 fw-bold">🔍 2x Zoom</button>
                             <button type="button" id="torchBtn" class="btn btn-sm btn-outline-secondary px-3 fw-bold">🔦 Light</button>
                         </div>
 
                         <!-- Manual input fallback -->
-                        <div class="mb-3">
+                        <div class="mb-2">
                             <label class="form-label small text-muted fw-bold">Or type / paste a code:</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-light">🔍</span>
                                 <input type="text" id="scanInput" class="form-control" placeholder="Serial or Tag..."
-                                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+                                    autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
                                 <button class="btn btn-temple" type="button" id="manualLookupBtn">Go</button>
                             </div>
+                        </div>
+
+                        <!-- OCR Detected Candidates Chips -->
+                        <div id="ocrCandidatesContainer" class="mb-3 p-2 bg-light rounded border" style="display:none;">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="small text-muted fw-bold">🎯 Detected Labels (tap to fill):</span>
+                                <button type="button" class="btn-close" id="closeCandidatesBtn" style="font-size:0.6rem;" aria-label="Close"></button>
+                            </div>
+                            <div id="ocrCandidatesList" class="d-flex flex-wrap gap-1"></div>
                         </div>
 
                         <!-- Details form -->

@@ -32,6 +32,159 @@ document.addEventListener('DOMContentLoaded', () => {
     const cameraControls = document.getElementById('cameraControls');
     const zoomBtn = document.getElementById('zoomBtn');
     const torchBtn = document.getElementById('torchBtn');
+    const ocrCaptureBtn = document.getElementById('ocrCaptureBtn');
+    const photoScanBtn = document.getElementById('photoScanBtn');
+    const cameraPhotoInput = document.getElementById('cameraPhotoInput');
+    const ocrAimGuide = document.getElementById('ocrAimGuide');
+    const ocrCandidatesContainer = document.getElementById('ocrCandidatesContainer');
+    const ocrCandidatesList = document.getElementById('ocrCandidatesList');
+    const closeCandidatesBtn = document.getElementById('closeCandidatesBtn');
+
+    if (closeCandidatesBtn && ocrCandidatesContainer) {
+        closeCandidatesBtn.addEventListener('click', () => {
+            ocrCandidatesContainer.style.display = 'none';
+        });
+    }
+
+    if (ocrCaptureBtn) {
+        ocrCaptureBtn.addEventListener('click', captureAndProcessOcr);
+    }
+
+    if (photoScanBtn && cameraPhotoInput) {
+        photoScanBtn.addEventListener('click', () => {
+            cameraPhotoInput.click();
+        });
+
+        cameraPhotoInput.addEventListener('change', async () => {
+            const file = cameraPhotoInput.files && cameraPhotoInput.files[0];
+            if (!file) return;
+
+            showToast("📸 Processing photo with OCR...");
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const res = await fetch('ocr', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!res.ok) {
+                    throw new Error(`Server returned status ${res.status}`);
+                }
+
+                const data = await res.json();
+                processOcrResult(data);
+            } catch (err) {
+                console.error("Photo OCR error:", err);
+                showToast("Photo OCR failed: " + (err.message || "Error"), true);
+            } finally {
+                cameraPhotoInput.value = '';
+            }
+        });
+    }
+
+    async function captureAndProcessOcr() {
+        const video = cameraRegion.querySelector('video');
+        if (!video || !video.videoWidth) {
+            showToast("Camera stream not ready yet.", true);
+            return;
+        }
+
+        if (ocrCaptureBtn) {
+            ocrCaptureBtn.disabled = true;
+            ocrCaptureBtn.textContent = '⏳ Reading...';
+        }
+        showToast("🔍 Reading text with OCR...");
+
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const crop = {
+                normalized: true,
+                x: 0.05,
+                y: 0.15,
+                width: 0.90,
+                height: 0.70
+            };
+
+            const res = await fetch('ocr', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    image: canvas.toDataURL('image/jpeg', 0.90),
+                    crop: crop
+                })
+            });
+
+            if (!res.ok) {
+                throw new Error(`Server returned ${res.status}`);
+            }
+
+            const data = await res.json();
+            processOcrResult(data);
+        } catch (err) {
+            console.error("OCR capture failed:", err);
+            showToast("OCR read failed: " + (err.message || "Network error"), true);
+        } finally {
+            if (ocrCaptureBtn) {
+                ocrCaptureBtn.disabled = false;
+                ocrCaptureBtn.textContent = '📸 Read Text';
+            }
+        }
+    }
+
+    function processOcrResult(data) {
+        if (!data || !data.success) {
+            showToast(data?.error || "No text detected. Try closer or better lighting.", true);
+            return;
+        }
+
+        if (data.primary) {
+            if (navigator.vibrate) navigator.vibrate(100);
+            cameraRegion.classList.add('scan-flash');
+            setTimeout(() => cameraRegion.classList.remove('scan-flash'), 400);
+
+            showToast("✓ Detected: " + data.primary);
+            scanInput.value = data.primary;
+            stopCamera();
+            performLookup(data.primary);
+        } else {
+            showToast("No serial / tag found in image. Try again.", true);
+        }
+
+        renderCandidates(data.candidates || []);
+    }
+
+    function renderCandidates(candidates) {
+        if (!ocrCandidatesContainer || !ocrCandidatesList) return;
+        ocrCandidatesList.innerHTML = '';
+
+        if (!candidates || candidates.length === 0) {
+            ocrCandidatesContainer.style.display = 'none';
+            return;
+        }
+
+        candidates.forEach(c => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-sm btn-outline-secondary d-flex align-items-center gap-1';
+            btn.style.fontSize = '0.82rem';
+            btn.innerHTML = `<span class="badge bg-light text-dark border">${c.label}</span> <strong>${c.value}</strong>`;
+            btn.addEventListener('click', () => {
+                scanInput.value = c.value;
+                performLookup(c.value);
+                ocrCandidatesContainer.style.display = 'none';
+            });
+            ocrCandidatesList.appendChild(btn);
+        });
+
+        ocrCandidatesContainer.style.display = 'block';
+    }
 
     if (zoomBtn) {
         zoomBtn.addEventListener('click', async () => {
@@ -124,12 +277,18 @@ document.addEventListener('DOMContentLoaded', () => {
         cameraScanBtn.classList.add('scanning');
         isScanning = true;
 
-        const mode = document.querySelector('input[name="scanMode"]:checked')?.value || 'barcode';
+        const mode = document.querySelector('input[name="scanMode"]:checked')?.value || 'ocr';
 
         let formatsToSupport;
         let qrboxFn;
 
-        if (mode === 'barcode') {
+        if (mode === 'ocr') {
+            // OCR Mode: Camera stream for live frame capture
+            formatsToSupport = [Html5QrcodeSupportedFormats.QR_CODE];
+            qrboxFn = function(viewfinderWidth, viewfinderHeight) {
+                return { width: Math.floor(viewfinderWidth * 0.95), height: 220 };
+            };
+        } else if (mode === 'barcode') {
             // Strictly 1D equipment barcodes (Lenovo, Dell, HP) - IGNORES all QR codes
             formatsToSupport = [
                 Html5QrcodeSupportedFormats.CODE_128,
@@ -219,8 +378,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 torchBtn.style.display = 'none';
             }
 
+            // Always show OCR capture button while camera is running
+            if (ocrCaptureBtn) {
+                ocrCaptureBtn.style.display = 'inline-block';
+                hasControls = true;
+            }
+
             if (hasControls && cameraControls) {
                 cameraControls.style.display = 'flex';
+            }
+
+            // In OCR mode: show aiming guide and reticle box
+            if (mode === 'ocr') {
+                if (ocrAimGuide) ocrAimGuide.style.display = 'block';
+                const existingReticle = cameraRegion.querySelector('.ocr-reticle');
+                if (!existingReticle) {
+                    const reticle = document.createElement('div');
+                    reticle.className = 'ocr-reticle';
+                    reticle.innerHTML = '<span class="ocr-reticle-label">Align Serial / Label</span>';
+                    cameraRegion.appendChild(reticle);
+                }
+            } else {
+                if (ocrAimGuide) ocrAimGuide.style.display = 'none';
             }
 
             // Add red alignment guide laser line inside viewfinder for 1D barcodes
@@ -234,7 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // High-Resolution Native BarcodeDetector (reads thin 1D Code 128 barcodes directly from full-res video)
-            if ('BarcodeDetector' in window) {
+            if (mode !== 'ocr' && 'BarcodeDetector' in window) {
                 try {
                     const supportedFormats = await BarcodeDetector.getSupportedFormats();
                     const desiredFormats = mode === 'barcode'
@@ -289,9 +468,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const laser = cameraRegion.querySelector('.barcode-laser');
         if (laser) laser.remove();
+        const reticle = cameraRegion.querySelector('.ocr-reticle');
+        if (reticle) reticle.remove();
+        if (ocrAimGuide) ocrAimGuide.style.display = 'none';
 
         cameraRegion.style.display = 'none';
-        cameraScanBtn.textContent = '📷 Tap to Scan';
+        cameraScanBtn.textContent = '📹 Live Camera';
         cameraScanBtn.classList.remove('scanning');
         isScanning = false;
     }
