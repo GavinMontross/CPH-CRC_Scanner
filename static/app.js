@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const finalizeBtn = document.getElementById('finalizeBtn');
     const clearBtn = document.getElementById('clearBtn');
     const cameraScanBtn = document.getElementById('cameraScanBtn');
+    const cameraWrapper = document.getElementById('cameraWrapper');
     const cameraRegion = document.getElementById('camera-region');
     const batchCount = document.getElementById('batchCount');
     const scanToast = document.getElementById('scanToast');
@@ -194,9 +195,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const maxZ = (caps.zoom && caps.zoom.max) || 2.0;
                 currentZoom = currentZoom <= 1.0 ? Math.min(2.5, maxZ) : 1.0;
                 await html5QrCode.applyVideoConstraints({ advanced: [{ zoom: currentZoom }] });
-                zoomBtn.textContent = currentZoom > 1.0 ? '🔍 1x Reset' : '🔍 2x Zoom';
-                zoomBtn.classList.toggle('btn-primary', currentZoom > 1.0);
-                zoomBtn.classList.toggle('btn-outline-secondary', currentZoom <= 1.0);
+                zoomBtn.textContent = currentZoom > 1.0 ? '🔍 1x' : '🔍 2x';
+                zoomBtn.classList.toggle('active-state', currentZoom > 1.0);
             } catch (e) {
                 console.warn('Zoom failed:', e);
             }
@@ -210,8 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 isTorchOn = !isTorchOn;
                 await html5QrCode.applyVideoConstraints({ advanced: [{ torch: isTorchOn }] });
                 torchBtn.textContent = isTorchOn ? '🔦 Off' : '🔦 Light';
-                torchBtn.classList.toggle('btn-warning', isTorchOn);
-                torchBtn.classList.toggle('btn-outline-secondary', !isTorchOn);
+                torchBtn.classList.toggle('active-state', isTorchOn);
             } catch (e) {
                 console.warn('Torch failed:', e);
             }
@@ -272,6 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function startCamera() {
+        if (cameraWrapper) cameraWrapper.style.display = 'block';
         cameraRegion.style.display = 'block';
         cameraScanBtn.textContent = '⏹ Stop Camera';
         cameraScanBtn.classList.add('scanning');
@@ -283,28 +283,13 @@ document.addEventListener('DOMContentLoaded', () => {
         let qrboxFn;
 
         if (mode === 'ocr') {
-            // OCR Mode: Camera stream for live frame capture
+            // Text / OCR Mode: Camera stream for live frame capture
             formatsToSupport = [Html5QrcodeSupportedFormats.QR_CODE];
             qrboxFn = function(viewfinderWidth, viewfinderHeight) {
-                return { width: Math.floor(viewfinderWidth * 0.95), height: 220 };
+                return { width: Math.floor(viewfinderWidth * 0.92), height: Math.floor(viewfinderHeight * 0.65) };
             };
-        } else if (mode === 'barcode') {
-            // Strictly 1D equipment barcodes (Lenovo, Dell, HP) - IGNORES all QR codes
-            formatsToSupport = [
-                Html5QrcodeSupportedFormats.CODE_128,
-                Html5QrcodeSupportedFormats.CODE_39,
-                Html5QrcodeSupportedFormats.CODE_93,
-                Html5QrcodeSupportedFormats.ITF,
-                Html5QrcodeSupportedFormats.CODABAR,
-                Html5QrcodeSupportedFormats.EAN_13,
-                Html5QrcodeSupportedFormats.UPC_A
-            ];
-            qrboxFn = function(viewfinderWidth, viewfinderHeight) {
-                // Wide horizontal slot matching equipment barcode strips
-                return { width: Math.floor(viewfinderWidth * 0.95), height: 140 };
-            };
-        } else if (mode === 'qr') {
-            // Strictly 2D codes (Temple University Asset Tags)
+        } else {
+            // QR Mode: 2D asset tags (Temple QR, Data Matrix)
             formatsToSupport = [
                 Html5QrcodeSupportedFormats.QR_CODE,
                 Html5QrcodeSupportedFormats.DATA_MATRIX
@@ -313,23 +298,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const minDim = Math.min(viewfinderWidth, viewfinderHeight);
                 const size = Math.floor(minDim * 0.75);
                 return { width: size, height: size };
-            };
-        } else {
-            // Both modes enabled
-            formatsToSupport = [
-                Html5QrcodeSupportedFormats.QR_CODE,
-                Html5QrcodeSupportedFormats.CODE_128,
-                Html5QrcodeSupportedFormats.CODE_39,
-                Html5QrcodeSupportedFormats.CODE_93,
-                Html5QrcodeSupportedFormats.ITF,
-                Html5QrcodeSupportedFormats.CODABAR,
-                Html5QrcodeSupportedFormats.EAN_13,
-                Html5QrcodeSupportedFormats.UPC_A,
-                Html5QrcodeSupportedFormats.DATA_MATRIX,
-                Html5QrcodeSupportedFormats.PDF_417
-            ];
-            qrboxFn = function(viewfinderWidth, viewfinderHeight) {
-                return { width: Math.floor(viewfinderWidth * 0.95), height: 240 };
             };
         }
 
@@ -359,9 +327,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let hasControls = false;
             if (caps.zoom && caps.zoom.max > 1.0) {
-                zoomBtn.style.display = 'inline-block';
-                zoomBtn.textContent = '🔍 2x Zoom';
-                zoomBtn.className = 'btn btn-sm btn-outline-secondary px-3 fw-bold';
+                zoomBtn.style.display = 'inline-flex';
+                zoomBtn.textContent = '🔍 2x';
+                zoomBtn.className = 'btn btn-dark-overlay';
                 currentZoom = 1.0;
                 hasControls = true;
             } else {
@@ -369,27 +337,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (caps.torch) {
-                torchBtn.style.display = 'inline-block';
+                torchBtn.style.display = 'inline-flex';
                 torchBtn.textContent = '🔦 Light';
-                torchBtn.className = 'btn btn-sm btn-outline-secondary px-3 fw-bold';
+                torchBtn.className = 'btn btn-dark-overlay';
                 isTorchOn = false;
                 hasControls = true;
             } else {
                 torchBtn.style.display = 'none';
             }
 
-            // Always show OCR capture button while camera is running
-            if (ocrCaptureBtn) {
-                ocrCaptureBtn.style.display = 'inline-block';
-                hasControls = true;
-            }
-
-            if (hasControls && cameraControls) {
-                cameraControls.style.display = 'flex';
-            }
-
-            // In OCR mode: show aiming guide and reticle box
+            // In OCR mode: show OCR capture button and top aiming guide
             if (mode === 'ocr') {
+                if (ocrCaptureBtn) ocrCaptureBtn.style.display = 'inline-flex';
                 if (ocrAimGuide) ocrAimGuide.style.display = 'block';
                 const existingReticle = cameraRegion.querySelector('.ocr-reticle');
                 if (!existingReticle) {
@@ -398,27 +357,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     reticle.innerHTML = '<span class="ocr-reticle-label">Align Serial / Label</span>';
                     cameraRegion.appendChild(reticle);
                 }
+                hasControls = true;
             } else {
+                if (ocrCaptureBtn) ocrCaptureBtn.style.display = 'none';
                 if (ocrAimGuide) ocrAimGuide.style.display = 'none';
+                const reticle = cameraRegion.querySelector('.ocr-reticle');
+                if (reticle) reticle.remove();
             }
 
-            // Add red alignment guide laser line inside viewfinder for 1D barcodes
-            if (mode === 'barcode' || mode === 'both') {
-                const existingLaser = cameraRegion.querySelector('.barcode-laser');
-                if (!existingLaser) {
-                    const laser = document.createElement('div');
-                    laser.className = 'barcode-laser';
-                    cameraRegion.appendChild(laser);
-                }
+            if (hasControls && cameraControls) {
+                cameraControls.style.display = 'flex';
             }
 
-            // High-Resolution Native BarcodeDetector (reads thin 1D Code 128 barcodes directly from full-res video)
-            if (mode !== 'ocr' && 'BarcodeDetector' in window) {
+            // High-Resolution Native BarcodeDetector for QR mode
+            if (mode === 'qr' && 'BarcodeDetector' in window) {
                 try {
                     const supportedFormats = await BarcodeDetector.getSupportedFormats();
-                    const desiredFormats = mode === 'barcode'
-                        ? ['code_128', 'code_39', 'code_93', 'itf', 'ean_13', 'upc_a']
-                        : (mode === 'qr' ? ['qr_code', 'data_matrix'] : supportedFormats);
+                    const desiredFormats = ['qr_code', 'data_matrix'];
                     const finalFormats = desiredFormats.filter(f => supportedFormats.includes(f));
 
                     if (finalFormats.length > 0) {
@@ -466,12 +421,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 html5QrCode = null;
             }).catch(err => console.error("Camera stop error:", err));
         }
-        const laser = cameraRegion.querySelector('.barcode-laser');
-        if (laser) laser.remove();
         const reticle = cameraRegion.querySelector('.ocr-reticle');
         if (reticle) reticle.remove();
         if (ocrAimGuide) ocrAimGuide.style.display = 'none';
 
+        if (cameraWrapper) cameraWrapper.style.display = 'none';
         cameraRegion.style.display = 'none';
         cameraScanBtn.textContent = '📹 Live Camera';
         cameraScanBtn.classList.remove('scanning');
