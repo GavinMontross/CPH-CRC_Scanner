@@ -521,10 +521,6 @@
                 padding: 0.75rem 0.75rem calc(env(safe-area-inset-bottom, 16px) + 75px);
             }
 
-            .desktop-sidebar {
-                display: none;
-            }
-
             .tab-content-section {
                 display: none;
             }
@@ -850,25 +846,17 @@
                 </div>
             </div>
 
-            <!-- Sidebar / FILES TAB for Desktop -->
-            <div class="col-md-5 desktop-sidebar">
-                <div class="scanner-box" id="files-section-desktop">
-                    <h5 class="text-dark mb-2" style="font-size:1.05rem; font-weight:700;">Completed Scans</h5>
-                    <p class="text-muted small mb-3">Download these files to submit to CRC.</p>
-                    <table class="table table-hover align-middle">
-                        <tbody id="fileListBody"></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Mobile-only files tab -->
-            <div class="col-12">
-                <div class="tab-content-section" id="files-tab">
-                    <div class="scanner-box">
-                        <h5 class="text-dark mb-2" style="font-size:1.05rem; font-weight:700;">Completed Scans</h5>
-                        <p class="text-muted small mb-3">Download these files to submit to CRC.</p>
-                        <table class="table table-hover align-middle">
-                            <tbody id="fileListBodyMobile"></tbody>
+            <!-- Files Section (Right Column on Desktop, Files Tab on Mobile) -->
+            <div class="col-md-5 tab-content-section" id="files-tab">
+                <div class="scanner-box">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="m-0 text-dark fw-bold" style="font-size:1.05rem;">Completed Scans</h5>
+                        <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill" onclick="loadCompletedFiles()" title="Refresh files list">🔄 Refresh</button>
+                    </div>
+                    <p class="text-muted small mb-3">Download completed batch Excel files to submit to CRC.</p>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <tbody id="fileListBody"></tbody>
                         </table>
                     </div>
                 </div>

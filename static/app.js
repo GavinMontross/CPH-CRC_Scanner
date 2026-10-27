@@ -804,16 +804,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('completed_files');
             const data = await res.json();
 
-            // Populate both desktop and mobile file lists
+            // Populate completed files list
             [fileListBody, fileListBodyMobile].forEach(tbody => {
                 if (!tbody) return;
                 tbody.innerHTML = '';
+
+                if (!data.files || data.files.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="2" class="text-center text-muted py-4"><span style="font-size:1.6rem; display:block; margin-bottom:4px;">📁</span>No completed batches yet. Finish a batch to generate an Excel file.</td></tr>`;
+                    return;
+                }
+
                 data.files.forEach(f => {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
-                        <td class="small">${escapeHtml(f)}</td>
-                        <td class="text-end">
-                            <a href="download/${encodeURIComponent(f)}" class="btn btn-sm btn-outline-temple">📥 Download</a>
+                        <td class="small fw-semibold text-truncate" style="max-width: 220px;" title="${escapeHtml(f)}">📄 ${escapeHtml(f)}</td>
+                        <td class="text-end text-nowrap">
+                            <a href="/download/${encodeURIComponent(f)}" class="btn btn-sm btn-outline-temple rounded-pill fw-semibold">⬇️ Download</a>
                         </td>
                     `;
                     tbody.appendChild(tr);
