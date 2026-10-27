@@ -59,6 +59,7 @@ SNIPE_VERIFY_SSL = os.getenv("SNIPE_VERIFY_SSL", "true").lower() == "true"
 SNIPE_TIMEOUT = int(os.getenv("SNIPE_TIMEOUT_SECONDS", "5"))
 
 CSV_LOCK = threading.Lock()
+USER_PHOTOS = {}  # In-memory store for profile photos to keep session cookie under 4KB limit
 
 if not os.path.exists(COMPLETED_FOLDER):
     os.makedirs(COMPLETED_FOLDER)
@@ -503,14 +504,15 @@ def auth_callback():
 
     user_name = user_data.get("name") or user_email.split("@")[0]
     user_photo = fetch_user_photo(access_token)
+    if user_photo:
+        USER_PHOTOS[user_email] = user_photo
 
+    # Store only essential identifiers in session cookie to strictly stay under 4KB limit
     session["user_logged_in"] = True
     session["user"] = {
         "name": user_name,
         "email": user_email,
-        "photo": user_photo,
     }
-    session["access_token"] = access_token
     session.permanent = True
 
     next_url = session.pop("next_url", None)
@@ -555,7 +557,12 @@ def serve_image(filename):
 @app.route("/")
 def index():
     ensure_csv()
-    return render_template("index.html", user=session.get("user"))
+    user = session.get("user")
+    user_context = None
+    if user:
+        user_context = dict(user)
+        user_context["photo"] = USER_PHOTOS.get(user.get("email"))
+    return render_template("index.html", user=user_context)
 
 
 @app.route("/lookup", methods=["POST"])
