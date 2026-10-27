@@ -28,10 +28,16 @@ from openpyxl.utils import get_column_letter
 
 try:
     import pytesseract
-    from PIL import Image, ImageEnhance, ImageOps
+    from PIL import Image, ImageEnhance, ImageOps, ImageFilter
     OCR_AVAILABLE = True
 except ImportError:
     OCR_AVAILABLE = False
+
+try:
+    from pyzbar.pyzbar import decode as decode_barcode
+    BARCODE_AVAILABLE = True
+except ImportError:
+    BARCODE_AVAILABLE = False
 
 
 load_dotenv()
@@ -582,13 +588,20 @@ def parse_equipment_text(raw_text):
 
     def add_candidate(val, label, confidence):
         clean = re.sub(r'[^A-Za-z0-9]', '', val).upper()
-        if not clean or len(clean) < 4 or len(clean) > 24:
+        if not clean or len(clean) < 4 or len(clean) > 28:
             return
         if clean in seen:
             return
         seen.add(clean)
+
+        # Standardize formatting (e.g. PC-1QLZMC or MJ-06F3K2)
+        formatted = val.upper().replace('—', '-').replace('–', '-').replace(' ', '')
+        if len(clean) == 8 and clean[:2].isalpha() and clean[2:].isalnum() and '-' not in formatted:
+            formatted = f"{clean[:2]}-{clean[2:]}"
+
         candidates.append({
-            "value": clean,
+            "value": formatted,
+            "raw": clean,
             "label": label,
             "confidence": confidence
         })
@@ -597,15 +610,27 @@ def parse_equipment_text(raw_text):
 
     # 1. High confidence pattern recognition
     for line in lines:
-        # Lenovo 1S barcode string (e.g. 1S10MQ000JUSMJ06F3K2 -> serial is MJ06F3K2)
+        # Lenovo 1S barcode string (e.g. 1S20UH000FUSPC1QLZMC -> serial is PC1QLZMC)
         m_1s = re.search(r'1S[A-Za-z0-9]{4,16}([A-Za-z0-9]{8})\b', line, re.I)
         if m_1s:
             add_candidate(m_1s.group(1), "Lenovo Serial", 95)
 
-        # S/N, SIN, or Serial Number (handles OCR misreading slash as I/1)
-        m_sn = re.search(r'(?:S[I/1|l]?N|Serial(?:\s*No\.?|\s*Number)?)(?:\s*\([^)]*\))?\s*[:#\s.-]*\s*([A-Za-z0-9]{6,14})\b', line, re.I)
+        # S/N, SIN, or Serial Number (handles OCR misreading slash as I/1, dash as em-dash)
+        m_sn = re.search(r'(?:S[I/1|l]?N|Serial(?:\s*No\.?|\s*Number)?)(?:\s*\([^)]*\))?\s*[:#\s.-]*\s*([A-Za-z0-9]{2}[-\s—–]?[A-Za-z0-9]{6,12})\b', line, re.I)
         if m_sn:
-            add_candidate(m_sn.group(1), "Serial Number", 92)
+            sn_val = m_sn.group(1).replace('—', '-').replace('–', '-').replace(' ', '').upper()
+            add_candidate(sn_val, "Serial Number", 92)
+
+            # OCR character confusion heuristic: '10' / '1O' vs '1Q' in Lenovo serials (e.g. PC-10LZMC -> PC-1QLZMC)
+            if re.search(r'\b[A-Z]{2}[-]?[1I][0O]', sn_val):
+                q_corrected = re.sub(r'([A-Z]{2}[-]?[1I])[0O]', r'\g<1>Q', sn_val)
+                add_candidate(q_corrected, "Serial Number (Q corrected)", 94)
+
+        # Type / Model Number (e.g. Type Number: 20UH-000FUS)
+        m_type = re.search(r'(?:Type(?:\s*No\.?|\s*Number)?|Model)\s*[:#\s.-]*\s*([A-Za-z0-9]{4}[-\s—–]?[A-Za-z0-9]{4,8})\b', line, re.I)
+        if m_type:
+            type_val = m_type.group(1).replace('—', '-').replace('–', '-').replace(' ', '').upper()
+            add_candidate(type_val, "Type / Model", 80)
 
         # Dell Service Tag
         m_st = re.search(r'(?:Service\s*Tag|S/?T)(?:\s*\([^)]*\))?\s*[:#\s.-]*\s*([A-Za-z0-9]{7})\b', line, re.I)
@@ -627,20 +652,21 @@ def parse_equipment_text(raw_text):
             add_candidate(m_mac.group(1), "MAC Address", 70)
 
     # 2. Standalone alphanumeric tokens that look like serials (6 to 12 chars)
-    for token in re.findall(r'\b[A-Za-z0-9]{6,12}\b', raw_text):
-        token_upper = token.upper()
-        if token_upper in {
+    for token in re.findall(r'\b[A-Za-z0-9]{2}[-\s—–]?[A-Za-z0-9]{6}\b', raw_text):
+        clean_tok = re.sub(r'[^A-Za-z0-9]', '', token).upper()
+        if clean_tok in {
             "SERIAL", "NUMBER", "SERVICETAG", "MODEL", "LENOVO", "TEMPLE", 
             "TEMPLEU", "UNIVERSITY", "EXPRESS", "OPTIPLEX", "THINKCENTRE",
             "PRODUCT", "SYSTEM", "DESKTOP", "LAPTOP", "COMPUTER"
         }:
             continue
-        has_letter = any(c.isalpha() for c in token_upper)
-        has_digit = any(c.isdigit() for c in token_upper)
+        has_letter = any(c.isalpha() for c in clean_tok)
+        has_digit = any(c.isdigit() for c in clean_tok)
         if has_letter and has_digit:
-            add_candidate(token_upper, "Alphanumeric Code", 60)
-        elif token_upper.isdigit() and len(token_upper) in (5, 6, 7):
-            add_candidate(token_upper, "Numeric Tag", 55)
+            add_candidate(token.replace('—', '-').replace('–', '-'), "Alphanumeric Code", 60)
+            if re.search(r'\b[A-Z]{2}[-]?[1I][0O]', token.upper()):
+                q_corrected = re.sub(r'([A-Z]{2}[-]?[1I])[0O]', r'\g<1>Q', token.upper()).replace('—', '-').replace('–', '-')
+                add_candidate(q_corrected, "Alphanumeric (Q corrected)", 65)
 
     candidates.sort(key=lambda x: x["confidence"], reverse=True)
     primary = candidates[0]["value"] if candidates else None
@@ -654,9 +680,9 @@ def parse_equipment_text(raw_text):
 
 @app.route("/ocr", methods=["POST"])
 def api_ocr():
-    if not OCR_AVAILABLE:
+    if not OCR_AVAILABLE and not BARCODE_AVAILABLE:
         return jsonify({
-            "error": "OCR engine is not installed on this server. Please ensure tesseract-ocr and pytesseract are available.",
+            "error": "Image scanning engine (pyzbar/pytesseract) is not installed on this server.",
             "success": False
         }), 500
 
@@ -705,39 +731,99 @@ def api_ocr():
                 bottom = top + int(crop_info.get("height", h))
             image = image.crop((max(0, left), max(0, top), min(w, right), min(h, bottom)))
 
-        # Preprocessing: convert to grayscale and upscale if small
-        gray = image.convert("L")
-        if gray.width < 1000:
-            scale = 1000.0 / gray.width
-            gray = gray.resize((int(gray.width * scale), int(gray.height * scale)), Image.Resampling.LANCZOS)
+        candidates = []
+        seen = set()
 
-        # Contrast enhancement for sharp text edges
-        enhancer = ImageEnhance.Contrast(gray)
-        enhanced = enhancer.enhance(1.8)
+        def register_candidate(val, label, confidence):
+            clean = re.sub(r'[^A-Za-z0-9]', '', val).upper()
+            if not clean or len(clean) < 4 or clean in seen:
+                return
+            seen.add(clean)
+            formatted = val.upper().replace('—', '-').replace('–', '-').replace(' ', '')
+            if len(clean) == 8 and clean[:2].isalpha() and clean[2:].isalnum() and '-' not in formatted:
+                formatted = f"{clean[:2]}-{clean[2:]}"
+            candidates.append({
+                "value": formatted,
+                "raw": clean,
+                "label": label,
+                "confidence": confidence
+            })
 
-        # Run OCR with block segmentation
-        raw_text = pytesseract.image_to_string(enhanced, config="--oem 3 --psm 6")
-        parsed = parse_equipment_text(raw_text)
+        # --- STEP 1: Direct 1D & 2D Barcode Decoding (100% precision) ---
+        if BARCODE_AVAILABLE:
+            try:
+                barcodes = decode_barcode(image)
+                for b in barcodes:
+                    raw_data = b.data.decode('utf-8', errors='replace').strip()
+                    clean_b = re.sub(r'[^A-Za-z0-9]', '', raw_data).upper()
 
-        # If no confident match found, fallback to sparse text analysis
-        if not parsed["primary"]:
-            sparse_text = pytesseract.image_to_string(enhanced, config="--oem 3 --psm 11")
-            parsed_sparse = parse_equipment_text(sparse_text)
-            if parsed_sparse["primary"]:
-                parsed = parsed_sparse
-                raw_text = (raw_text + "\n" + sparse_text).strip()
+                    # Lenovo 1S barcode string (e.g. 1S20UH000FUSPC1QLZMC -> serial is PC-1QLZMC)
+                    if clean_b.startswith("1S") and len(clean_b) >= 14:
+                        serial_part = clean_b[-8:]
+                        type_part = clean_b[2:-8]
+                        register_candidate(serial_part, f"Barcode Serial ({b.type})", 100)
+                        if len(type_part) >= 4:
+                            fmt_type = f"{type_part[:4]}-{type_part[4:]}" if len(type_part) == 10 else type_part
+                            register_candidate(fmt_type, f"Barcode Model ({b.type})", 80)
+                    elif clean_b.startswith("TU") or (clean_b.isdigit() and len(clean_b) in (5, 6, 7)):
+                        register_candidate(clean_b, f"Barcode Tag ({b.type})", 100)
+                    else:
+                        register_candidate(clean_b, f"Barcode ({b.type})", 98)
+            except Exception as b_err:
+                logging.warning(f"[OCR] Barcode decode error: {b_err}")
 
-        logging.info(f"[OCR] Extracted text ({len(raw_text)} chars) -> Primary match: {parsed['primary']} (found {len(parsed['candidates'])} candidates)")
+        # --- STEP 2: Multi-Pass Optical Character Recognition ---
+        raw_text_parts = []
+        if OCR_AVAILABLE:
+            gray = image.convert("L")
+            inverted = ImageOps.invert(gray)
+
+            # Upscale and sharpen for crisp character edges (fixes Q vs 0/O confusion)
+            w, h = gray.size
+            scale = max(2.0, 1600.0 / max(w, 1))
+            scaled_w, scaled_h = int(w * scale), int(h * scale)
+
+            scaled_inv = inverted.resize((scaled_w, scaled_h), Image.Resampling.LANCZOS).filter(ImageFilter.SHARPEN)
+            scaled_gray = gray.resize((scaled_w, scaled_h), Image.Resampling.LANCZOS).filter(ImageFilter.SHARPEN)
+
+            # Pass A: Inverted image with sparse text segmentation (best for white-on-black sticker text)
+            try:
+                txt_inv = pytesseract.image_to_string(scaled_inv, config="--oem 3 --psm 11")
+                if txt_inv:
+                    raw_text_parts.append(txt_inv)
+            except Exception as e:
+                pass
+
+            # Pass B: Normal image with block segmentation
+            try:
+                txt_gray = pytesseract.image_to_string(scaled_gray, config="--oem 3 --psm 6")
+                if txt_gray:
+                    raw_text_parts.append(txt_gray)
+            except Exception as e:
+                pass
+
+            combined_ocr_text = "\n".join(raw_text_parts)
+            ocr_res = parse_equipment_text(combined_ocr_text)
+
+            # Merge OCR candidates
+            for c in ocr_res["candidates"]:
+                register_candidate(c["value"], c["label"], c["confidence"])
+
+        candidates.sort(key=lambda x: x["confidence"], reverse=True)
+        primary = candidates[0]["value"] if candidates else None
+        combined_text = "\n".join(raw_text_parts)
+
+        logging.info(f"[OCR/Barcode] Processed image -> Found {len(candidates)} candidates. Primary: {primary}")
 
         return jsonify({
             "success": True,
-            "primary": parsed["primary"],
-            "candidates": parsed["candidates"],
-            "raw_text": raw_text
+            "primary": primary,
+            "candidates": candidates,
+            "raw_text": combined_text
         })
     except Exception as e:
         logging.error(f"[OCR] Processing error: {e}", exc_info=True)
-        return jsonify({"error": f"OCR processing failed: {str(e)}", "success": False}), 500
+        return jsonify({"error": f"Scanning failed: {str(e)}", "success": False}), 500
 
 
 @app.route("/lookup", methods=["POST"])

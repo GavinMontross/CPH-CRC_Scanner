@@ -4,3 +4,4 @@ python-dotenv
 openpyxl
 pytesseract
 pillow
+pyzbar
