@@ -40,6 +40,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const ocrCandidatesContainer = document.getElementById('ocrCandidatesContainer');
     const ocrCandidatesList = document.getElementById('ocrCandidatesList');
     const closeCandidatesBtn = document.getElementById('closeCandidatesBtn');
+    const closeCameraBtn = document.getElementById('closeCameraBtn');
+
+    if (closeCameraBtn) {
+        closeCameraBtn.addEventListener('click', stopCamera);
+    }
 
     if (closeCandidatesBtn && ocrCandidatesContainer) {
         closeCandidatesBtn.addEventListener('click', () => {
@@ -235,6 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 btn.classList.add('active');
                 const target = document.getElementById(btn.dataset.tab);
                 if (target) target.classList.add('active');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
             });
         });
     }
@@ -354,7 +360,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!existingReticle) {
                     const reticle = document.createElement('div');
                     reticle.className = 'ocr-reticle';
-                    reticle.innerHTML = '<span class="ocr-reticle-label">Align Serial / Label</span>';
+                    reticle.innerHTML = `
+                        <span class="bracket bracket-tl"></span>
+                        <span class="bracket bracket-tr"></span>
+                        <span class="bracket bracket-bl"></span>
+                        <span class="bracket bracket-br"></span>
+                        <span class="ocr-reticle-label">Align Serial / Label</span>
+                    `;
                     cameraRegion.appendChild(reticle);
                 }
                 hasControls = true;
@@ -727,10 +739,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await res.json();
             recentTableBody.innerHTML = '';
 
-            // Update batch count
+            // Update batch count & mobile bottom tab badge
+            const count = (data.items || []).length;
             if (batchCount) {
-                const count = data.items.length;
                 batchCount.textContent = count > 0 ? `${count} item${count !== 1 ? 's' : ''} scanned` : 'No items yet';
+            }
+            const batchTabBadge = document.getElementById('batchTabBadge');
+            if (batchTabBadge) {
+                batchTabBadge.textContent = count;
+                batchTabBadge.style.display = count > 0 ? 'inline-block' : 'none';
+            }
+
+            if (count === 0) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td colspan="5" class="text-center text-muted py-4"><span style="font-size:1.8rem; display:block; margin-bottom:4px;">📦</span>No equipment added to this batch yet.</td>`;
+                recentTableBody.appendChild(tr);
+                return;
             }
 
             data.items.forEach(row => {

@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="CRC Scanner">
@@ -12,260 +12,193 @@
     <link rel="icon" href="/images/templelogo.png" type="image/png">
     <link rel="apple-touch-icon" href="/images/templelogo.png">
 
-    <!-- html5-qrcode: supports QR codes + barcodes (Code128, EAN, UPC, etc.) via camera -->
+    <!-- html5-qrcode: camera scan engine -->
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
     <style>
         :root {
             --temple-cherry: #9D2235;
             --temple-dark: #7b1b2a;
-            --temple-gray: #f5f5f5;
+            --temple-light: #fbf1f2;
+            --bg-canvas: #f6f8fa;
+            --card-border: #e2e8f0;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
         }
 
-        * { box-sizing: border-box; }
-
-        body {
-            background-color: var(--temple-gray);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            padding: 0;
-            margin: 0;
+        * {
+            box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
         }
 
+        body {
+            background-color: var(--bg-canvas);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", -apple-system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            padding: 0;
+            margin: 0;
+            -webkit-font-smoothing: antialiased;
+        }
+
         .app-container {
-            max-width: 960px;
+            max-width: 980px;
             margin: 0 auto;
             padding: 1rem;
         }
 
-        /* Temple Branding */
-        .brand-header {
-            color: var(--temple-cherry);
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            border-bottom: 3px solid var(--temple-cherry);
-            padding-bottom: 10px;
-            margin-bottom: 16px;
-            font-size: 1.4rem;
-            text-align: center;
-        }
-
-        .scanner-box {
-            background: white;
-            padding: 1.25rem;
-            border-radius: 10px;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
-            border-top: 4px solid var(--temple-cherry);
+        /* --- Brand Bar --- */
+        .brand-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem 0 0.85rem;
+            border-bottom: 2px solid #e2e8f0;
             margin-bottom: 1rem;
         }
 
-        /* --- Buttons --- */
-        .btn-temple {
-            background-color: var(--temple-cherry);
-            border-color: var(--temple-cherry);
-            color: white;
-            font-weight: 600;
-        }
-
-        .btn-temple:hover,
-        .btn-temple:focus,
-        .btn-temple:active,
-        .btn-temple:active:focus,
-        .btn-temple.active {
-            background-color: var(--temple-dark) !important;
-            border-color: var(--temple-dark) !important;
-            color: white !important;
-            box-shadow: none !important;
-            outline: none !important;
-        }
-
-        .btn-outline-temple {
+        .brand-title {
             color: var(--temple-cherry);
-            border-color: var(--temple-cherry);
+            font-weight: 800;
+            font-size: 1.25rem;
+            letter-spacing: -0.2px;
+            line-height: 1.1;
+            margin: 0;
         }
 
-        .btn-outline-temple:hover {
-            background-color: var(--temple-cherry);
-            color: white;
+        .brand-sub {
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
         }
 
-        .form-control:focus {
-            border-color: var(--temple-cherry);
-            box-shadow: 0 0 0 0.25rem rgba(157, 34, 53, 0.25);
+        /* --- Cards --- */
+        .scanner-box {
+            background: #ffffff;
+            border-radius: 16px;
+            border: 1px solid var(--card-border);
+            box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
+            padding: 1.25rem;
+            margin-bottom: 1.25rem;
         }
 
-        .table-hover tbody tr:hover {
-            background-color: rgba(157, 34, 53, 0.05);
+        /* --- iOS Segmented Control (Mode Switcher) --- */
+        .segmented-control {
+            display: flex;
+            background: #eef2f6;
+            padding: 4px;
+            border-radius: 14px;
+            position: relative;
+            user-select: none;
+            gap: 4px;
         }
 
-        /* --- Camera Action Buttons --- */
+        .segmented-control input[type="radio"] {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .segmented-control label {
+            flex: 1;
+            text-align: center;
+            padding: 0.55rem 0.75rem;
+            font-size: 0.88rem;
+            font-weight: 600;
+            color: #475569;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            margin: 0;
+        }
+
+        .segmented-control input[type="radio"]:checked + label {
+            background: #ffffff;
+            color: var(--temple-cherry);
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+            font-weight: 700;
+        }
+
+        /* --- Scan Action Buttons --- */
         .scan-btn-group {
             display: flex;
-            gap: 0.5rem;
-            margin-bottom: 0.75rem;
+            gap: 0.6rem;
+            margin-bottom: 0.85rem;
         }
 
         .scan-btn-group .btn {
-            flex: 1;
-            font-size: 0.95rem;
-            padding: 0.65rem;
-            border-radius: 8px;
-        }
-
-        #cameraScanBtn {
-            background: var(--temple-cherry);
-            border: none;
-            color: white;
+            border-radius: 12px;
             font-weight: 600;
-            font-size: 1.1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-height: 48px;
+            font-size: 0.95rem;
+            transition: transform 0.1s ease, box-shadow 0.2s;
         }
 
-        #cameraScanBtn:active {
-            background: var(--temple-dark);
+        .scan-btn-group .btn:active {
+            transform: scale(0.98);
         }
 
-        #cameraScanBtn.scanning {
-            background: #dc3545;
+        .btn-hero-camera {
+            flex: 1.2;
+            background: linear-gradient(135deg, var(--temple-cherry) 0%, var(--temple-dark) 100%);
+            color: white;
+            border: none;
+            box-shadow: 0 4px 14px rgba(157, 34, 53, 0.28);
+        }
+
+        .btn-hero-camera:hover, .btn-hero-camera:focus {
+            color: white;
+            opacity: 0.95;
+        }
+
+        .btn-hero-camera.scanning {
+            background: #dc2626 !important;
             animation: pulse 1.5s infinite;
+        }
+
+        .btn-hero-photo {
+            flex: 1;
+            background: #ffffff;
+            border: 1.5px solid #cbd5e1;
+            color: #1e293b;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .btn-hero-photo:hover {
+            background: #f8fafc;
+            border-color: #94a3b8;
         }
 
         @keyframes pulse {
             0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
+            50% { opacity: 0.75; }
         }
 
-        /* Status badge */
-        .status-bar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-        }
-
-        /* Tab navigation for mobile */
-        .mobile-tabs {
-            display: none;
-        }
-
-        /* --- Mobile Optimizations --- */
-        @media (max-width: 767px) {
-            .app-container {
-                padding: 0.5rem;
-            }
-
-            .brand-header {
-                font-size: 1.1rem;
-                margin-bottom: 10px;
-                padding-bottom: 8px;
-            }
-
-            .scanner-box {
-                padding: 1rem;
-                border-radius: 8px;
-            }
-
-            .desktop-sidebar {
-                display: none;
-            }
-
-            .mobile-tabs {
-                display: flex;
-                gap: 0;
-                margin-bottom: 0.75rem;
-                background: white;
-                border-radius: 8px;
-                overflow: hidden;
-                box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-            }
-
-            .mobile-tabs button {
-                flex: 1;
-                border: none;
-                background: white;
-                padding: 0.6rem;
-                font-size: 0.85rem;
-                font-weight: 600;
-                color: #666;
-                border-bottom: 3px solid transparent;
-                transition: all 0.2s;
-            }
-
-            .mobile-tabs button.active {
-                color: var(--temple-cherry);
-                border-bottom-color: var(--temple-cherry);
-            }
-
-            .tab-content-section {
-                display: none;
-            }
-
-            .tab-content-section.active {
-                display: block;
-            }
-
-            /* Bigger touch targets */
-            .btn {
-                min-height: 44px;
-            }
-
-            .form-control {
-                font-size: 16px !important; /* Prevents iOS zoom on focus */
-            }
-
-            .table {
-                font-size: 0.82rem;
-            }
-
-            .table .btn-sm {
-                padding: 0.35rem 0.5rem;
-                font-size: 0.75rem;
-            }
-        }
-
-        /* Desktop keeps the 2-column layout */
-        @media (min-width: 768px) {
-            .app-container {
-                padding: 2rem 1rem;
-            }
-
-            .brand-header {
-                font-size: 1.5rem;
-            }
-        }
-
-        /* --- Scan Mode Toggle Switcher --- */
-        .scan-mode-pills .btn {
-            font-size: 0.9rem;
-            font-weight: 600;
-            padding: 0.45rem 0.75rem;
-            transition: all 0.15s ease;
-        }
-
-        .scan-mode-pills .btn-check:checked + .btn {
-            background-color: var(--temple-cherry) !important;
-            border-color: var(--temple-cherry) !important;
-            color: #fff !important;
-            box-shadow: 0 2px 6px rgba(157, 34, 53, 0.35);
-        }
-
-        /* --- Camera Viewfinder & Floating Mobile Controls --- */
+        /* --- Camera Viewfinder Container & HUD --- */
         .camera-wrapper {
             position: relative;
             width: 100%;
-            border-radius: 10px;
+            border-radius: 16px;
             overflow: hidden;
             background: #000;
-            margin-bottom: 0.75rem;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+            margin-bottom: 0.85rem;
         }
 
         #camera-region {
             position: relative;
             width: 100%;
-            max-height: 42vh;
+            max-height: 38vh;
             min-height: 220px;
-            border-radius: 10px;
             overflow: hidden;
             background: #000;
         }
@@ -273,33 +206,104 @@
         #camera-region video {
             width: 100% !important;
             height: 100% !important;
-            max-height: 42vh !important;
+            max-height: 38vh !important;
             object-fit: cover !important;
-            border-radius: 10px;
+            border-radius: 16px;
         }
 
-        /* Top Aiming Badge floating inside camera view */
+        /* Top Aiming Badge */
         .camera-aim-badge {
             position: absolute;
-            top: 10px;
+            top: 12px;
             left: 50%;
             transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.72);
             color: #fff;
             font-size: 0.75rem;
             font-weight: 600;
-            padding: 4px 14px;
+            padding: 5px 14px;
             border-radius: 20px;
             z-index: 25;
             white-space: nowrap;
             pointer-events: none;
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
         }
 
-        /* Floating Controls pinned to bottom inside camera view */
+        /* Quick Close Button at Viewfinder Top-Right */
+        .camera-close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 26;
+            background: rgba(0, 0, 0, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            color: #ffffff;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            transition: all 0.15s ease;
+        }
+
+        .camera-close-btn:active {
+            transform: scale(0.9);
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        /* Modern Lens Corner Brackets */
+        .ocr-reticle {
+            position: absolute;
+            top: 14%;
+            left: 8%;
+            width: 84%;
+            height: 60%;
+            pointer-events: none;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35); /* Focus dark vignette */
+        }
+
+        .ocr-reticle .bracket {
+            position: absolute;
+            width: 22px;
+            height: 22px;
+            border-color: #ffffff;
+            border-style: solid;
+        }
+
+        .ocr-reticle .bracket-tl { top: 0; left: 0; border-width: 3px 0 0 3px; border-top-left-radius: 8px; }
+        .ocr-reticle .bracket-tr { top: 0; right: 0; border-width: 3px 3px 0 0; border-top-right-radius: 8px; }
+        .ocr-reticle .bracket-bl { bottom: 0; left: 0; border-width: 0 0 3px 3px; border-bottom-left-radius: 8px; }
+        .ocr-reticle .bracket-br { bottom: 0; right: 0; border-width: 0 3px 3px 0; border-bottom-right-radius: 8px; }
+
+        .ocr-reticle-label {
+            background: rgba(0, 0, 0, 0.75);
+            color: #ffffff;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+
+        /* Floating Shutter HUD at Bottom of Viewfinder */
         .camera-floating-controls {
             position: absolute;
             bottom: 12px;
@@ -319,100 +323,179 @@
         }
 
         .btn-shutter {
-            background: var(--temple-cherry) !important;
-            color: #fff !important;
+            background: linear-gradient(135deg, var(--temple-cherry) 0%, var(--temple-dark) 100%) !important;
+            color: #ffffff !important;
             border: 2px solid rgba(255, 255, 255, 0.95) !important;
             font-size: 1rem !important;
             font-weight: 700 !important;
             padding: 0.6rem 1.4rem !important;
             border-radius: 50px !important;
-            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5) !important;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             gap: 6px;
-            transition: transform 0.1s ease, background-color 0.2s;
+            transition: transform 0.1s ease;
         }
 
         .btn-shutter:active {
             transform: scale(0.95);
-            background: var(--temple-dark) !important;
         }
 
-        .btn-dark-overlay {
-            background: rgba(0, 0, 0, 0.7) !important;
-            color: #fff !important;
-            border: 1px solid rgba(255, 255, 255, 0.35) !important;
+        .btn-hud {
+            background: rgba(0, 0, 0, 0.68) !important;
+            color: #ffffff !important;
+            border: 1px solid rgba(255, 255, 255, 0.3) !important;
             font-weight: 600 !important;
             font-size: 0.8rem !important;
             padding: 0.45rem 0.85rem !important;
             border-radius: 50px !important;
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+            transition: all 0.15s ease;
         }
 
-        .btn-dark-overlay.active-state {
-            background: #ffc107 !important;
-            color: #000 !important;
-            border-color: #ffc107 !important;
+        .btn-hud.active-state {
+            background: #f59e0b !important;
+            color: #000000 !important;
+            border-color: #f59e0b !important;
+            font-weight: 700 !important;
         }
 
-        /* OCR targeting bracket inside viewfinder */
-        .ocr-reticle {
-            position: absolute;
-            top: 18%;
-            left: 6%;
-            width: 88%;
-            height: 54%;
-            border: 2px dashed rgba(255, 255, 255, 0.85);
-            border-radius: 8px;
-            pointer-events: none;
-            z-index: 10;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 0 12px rgba(0, 0, 0, 0.35) inset;
+        /* --- Modern Form Inputs --- */
+        .form-card {
+            background: #f8fafc;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 0.45rem 0.75rem;
+            transition: all 0.15s ease;
         }
 
-        .ocr-reticle-label {
-            background: rgba(0, 0, 0, 0.75);
-            color: #fff;
-            font-size: 0.72rem;
-            font-weight: bold;
-            padding: 3px 10px;
-            border-radius: 4px;
+        .form-card:focus-within {
+            background: #ffffff;
+            border-color: var(--temple-cherry);
+            box-shadow: 0 0 0 3px rgba(157, 34, 53, 0.12);
+        }
+
+        .form-card.highlight-field {
+            border-color: #cbd5e1;
+            background: #ffffff;
+        }
+
+        .form-card.highlight-field:focus-within {
+            border-color: var(--temple-cherry);
+        }
+
+        .form-card-label {
+            display: block;
+            font-size: 0.68rem;
+            font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #64748b;
+            margin-bottom: 2px;
         }
 
-        /* Haptic-style flash on scan success */
-        .scan-flash {
-            animation: flashGreen 0.4s ease-out;
+        .form-card-input {
+            width: 100%;
+            border: none;
+            background: transparent;
+            padding: 0;
+            font-size: 16px !important; /* Prevents iOS auto-zoom */
+            color: #0f172a;
+            outline: none;
         }
 
-        @keyframes flashGreen {
-            0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.6); }
-            100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+        .search-pill {
+            background: #ffffff;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 30px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+            transition: all 0.15s ease;
         }
 
-        /* Scan result toast */
+        .search-pill:focus-within {
+            border-color: var(--temple-cherry);
+            box-shadow: 0 0 0 3px rgba(157, 34, 53, 0.12);
+        }
+
+        .search-pill input {
+            border: none;
+            outline: none;
+            padding: 0.55rem 0.85rem;
+            font-size: 16px !important;
+            flex: 1;
+            background: transparent;
+        }
+
+        .search-pill button {
+            border: none;
+            background: var(--temple-cherry);
+            color: white;
+            font-weight: 600;
+            padding: 0.55rem 1.25rem;
+            transition: background-color 0.15s ease;
+        }
+
+        .search-pill button:active {
+            background: var(--temple-dark);
+        }
+
+        /* --- Status Bar & Actions --- */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            padding-top: 0.5rem;
+        }
+
+        .status-pill {
+            background: #e2e8f0;
+            color: #334155;
+            font-size: 0.78rem;
+            font-weight: 600;
+            padding: 0.4rem 0.75rem;
+            border-radius: 20px;
+        }
+
+        .btn-temple {
+            background-color: var(--temple-cherry);
+            border-color: var(--temple-cherry);
+            color: white;
+            font-weight: 600;
+            border-radius: 10px;
+        }
+
+        .btn-temple:hover, .btn-temple:active {
+            background-color: var(--temple-dark) !important;
+            border-color: var(--temple-dark) !important;
+            color: white !important;
+        }
+
+        /* --- Toast Notification --- */
         .scan-toast {
             position: fixed;
-            top: 1rem;
+            top: calc(env(safe-area-inset-top, 12px) + 12px);
             left: 50%;
             transform: translateX(-50%);
-            background: #28a745;
+            background: #0f172a;
             color: white;
-            padding: 0.6rem 1.5rem;
-            border-radius: 25px;
+            padding: 0.65rem 1.4rem;
+            border-radius: 30px;
             font-weight: 600;
-            font-size: 0.9rem;
+            font-size: 0.88rem;
             z-index: 9999;
             opacity: 0;
-            transition: opacity 0.3s;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+            transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
             pointer-events: none;
+            white-space: nowrap;
         }
 
         .scan-toast.show {
@@ -420,7 +503,178 @@
         }
 
         .scan-toast.error {
-            background: #dc3545;
+            background: #dc2626;
+        }
+
+        .scan-flash {
+            animation: flashGreen 0.4s ease-out;
+        }
+
+        @keyframes flashGreen {
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+
+        /* --- Mobile vs Desktop Layout --- */
+        @media (max-width: 767px) {
+            .app-container {
+                padding: 0.75rem 0.75rem calc(env(safe-area-inset-bottom, 16px) + 75px);
+            }
+
+            .desktop-sidebar {
+                display: none;
+            }
+
+            .tab-content-section {
+                display: none;
+            }
+
+            .tab-content-section.active {
+                display: block;
+            }
+
+            /* --- Fixed Bottom Tab Bar (iOS Native Style) --- */
+            .mobile-tabs {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                z-index: 1050;
+                display: flex;
+                background: rgba(255, 255, 255, 0.94);
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
+                border-top: 1px solid rgba(0, 0, 0, 0.08);
+                padding: 6px 12px calc(env(safe-area-inset-bottom, 8px) + 6px);
+                box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
+                gap: 8px;
+            }
+
+            .mobile-tabs button {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                background: transparent;
+                border: none;
+                padding: 6px 2px;
+                border-radius: 12px;
+                font-size: 0.72rem;
+                font-weight: 600;
+                color: #8e8e93;
+                transition: all 0.15s ease;
+                position: relative;
+                min-height: 48px;
+            }
+
+            .mobile-tabs button.active {
+                color: var(--temple-cherry);
+                background: rgba(157, 34, 53, 0.08);
+                font-weight: 700;
+            }
+
+            .mobile-tabs button .tab-icon {
+                font-size: 1.25rem;
+                line-height: 1.2;
+                margin-bottom: 2px;
+            }
+
+            .mobile-tabs button .badge-count {
+                position: absolute;
+                top: 4px;
+                right: calc(50% - 22px);
+                background: var(--temple-cherry);
+                color: white;
+                font-size: 0.65rem;
+                font-weight: 700;
+                padding: 1px 6px;
+                border-radius: 10px;
+                min-width: 18px;
+                text-align: center;
+            }
+
+            /* --- Card Layout for Batch Table on Mobile --- */
+            #recentTable thead {
+                display: none;
+            }
+
+            #recentTable, #recentTable tbody, #recentTable tr, #recentTable td {
+                display: block;
+                width: 100%;
+            }
+
+            #recentTable tr {
+                background: #ffffff;
+                border: 1.5px solid #e2e8f0;
+                border-radius: 14px;
+                padding: 0.85rem 1rem;
+                margin-bottom: 0.75rem;
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+                position: relative;
+            }
+
+            #recentTable td {
+                padding: 0.1rem 0;
+                border: none;
+            }
+
+            #recentTable td:nth-child(1) {
+                font-size: 0.72rem;
+                font-weight: 700;
+                text-transform: uppercase;
+                color: var(--temple-cherry);
+                letter-spacing: 0.5px;
+            }
+
+            #recentTable td:nth-child(2) {
+                font-size: 0.95rem;
+                font-weight: 600;
+                color: #1e293b;
+                margin-top: 1px;
+            }
+
+            #recentTable td:nth-child(3) {
+                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                font-size: 0.95rem;
+                font-weight: 700;
+                color: #0f172a;
+                background: #f1f5f9;
+                display: inline-block;
+                padding: 2px 8px;
+                border-radius: 6px;
+                margin-top: 5px;
+            }
+
+            #recentTable td:nth-child(4) {
+                font-size: 0.82rem;
+                color: #64748b;
+                margin-top: 4px;
+            }
+
+            #recentTable td:nth-child(5) {
+                position: absolute;
+                top: 0.85rem;
+                right: 0.85rem;
+                width: auto;
+            }
+
+            #recentTable td:nth-child(5) .btn {
+                min-height: 32px;
+                padding: 0.25rem 0.55rem;
+                border-radius: 8px;
+            }
+        }
+
+        /* Desktop keeps the 2-column layout */
+        @media (min-width: 768px) {
+            .mobile-tabs {
+                display: none !important;
+            }
+
+            .tab-content-section {
+                display: block !important;
+            }
         }
     </style>
 </head>
@@ -430,31 +684,28 @@
     <div id="scanToast" class="scan-toast"></div>
 
     <div class="app-container">
-        <div class="brand-bar d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-3" style="border-color: var(--temple-cherry) !important;">
+        <!-- Top Brand Bar -->
+        <div class="brand-bar">
             <div class="d-flex align-items-center gap-2">
                 <img src="/images/templelogo.png" alt="Temple Logo" style="height: 32px; width: auto;">
-                <h2 class="m-0" style="color: var(--temple-cherry); font-weight: 700; text-transform: uppercase; letter-spacing: 1px; font-size: 1.25rem;">CPH CRC Scanner</h2>
+                <div>
+                    <h1 class="brand-title">CPH CRC Scanner</h1>
+                    <span class="brand-sub">Temple University</span>
+                </div>
             </div>
             {% if user %}
             <div class="d-flex align-items-center gap-2">
-                <div class="d-flex align-items-center gap-2 bg-white px-2 py-1 rounded border shadow-sm">
+                <div class="d-flex align-items-center gap-2 bg-white px-2 py-1 rounded-pill border shadow-sm">
                     {% if user.photo %}
-                    <img src="data:image/jpeg;base64,{{ user.photo }}" alt="User Photo" style="width: 26px; height: 26px; border-radius: 50%; object-fit: cover;">
+                    <img src="data:image/jpeg;base64,{{ user.photo }}" alt="User Photo" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">
                     {% else %}
-                    <span style="font-size: 1rem;">👤</span>
+                    <span style="font-size: 0.9rem;">👤</span>
                     {% endif %}
-                    <span class="small fw-semibold text-truncate d-none d-sm-inline" style="max-width: 150px;" title="{{ user.email }}">{{ user.name }}</span>
+                    <span class="small fw-semibold text-truncate d-none d-sm-inline" style="max-width: 140px;" title="{{ user.email }}">{{ user.name }}</span>
                 </div>
-                <a href="/logout" class="btn btn-outline-danger btn-sm" title="Sign out">Sign Out</a>
+                <a href="/logout" class="btn btn-outline-danger btn-sm rounded-pill" title="Sign out">Sign Out</a>
             </div>
             {% endif %}
-        </div>
-
-        <!-- Mobile tab bar -->
-        <div class="mobile-tabs" id="mobileTabs">
-            <button class="active" data-tab="scanner-tab">📷 Scanner</button>
-            <button data-tab="batch-tab">📋 Batch</button>
-            <button data-tab="files-tab">📁 Files</button>
         </div>
 
         <div class="row">
@@ -464,57 +715,66 @@
                 <div class="tab-content-section active" id="scanner-tab">
                     <div class="scanner-box">
                         <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h5 class="m-0 text-secondary" style="font-size:1rem;">New Entry</h5>
-                            <button id="finalizeBtn" class="btn btn-warning btn-sm fw-bold">Finish Batch</button>
+                            <h5 class="m-0 text-dark fw-bold" style="font-size:1.05rem;">Scan Equipment</h5>
+                            <button id="finalizeBtn" class="btn btn-warning btn-sm fw-bold rounded-pill">Finish Batch</button>
                         </div>
 
-                        <!-- Scan Mode Switcher (Text Scan vs QR Code) -->
-                        <div class="btn-group w-100 mb-2 scan-mode-pills" role="group">
-                            <input type="radio" class="btn-check" name="scanMode" id="modeOcr" value="ocr" checked>
-                            <label class="btn btn-outline-secondary" for="modeOcr">📝 Text Scan</label>
+                        <!-- Scan Mode Switcher (iOS Segmented Control) -->
+                        <div class="segmented-control mb-3">
+                            <input type="radio" name="scanMode" id="modeOcr" value="ocr" checked>
+                            <label for="modeOcr">
+                                <span>📝</span> <span>Text Scan</span>
+                            </label>
 
-                            <input type="radio" class="btn-check" name="scanMode" id="modeQr" value="qr">
-                            <label class="btn btn-outline-secondary" for="modeQr">📱 QR Code</label>
+                            <input type="radio" name="scanMode" id="modeQr" value="qr">
+                            <label for="modeQr">
+                                <span>📱</span> <span>QR Code</span>
+                            </label>
                         </div>
 
                         <!-- Camera Action Buttons -->
                         <div class="scan-btn-group">
-                            <button id="cameraScanBtn" class="btn">📹 Live Camera</button>
-                            <button type="button" id="photoScanBtn" class="btn btn-outline-dark fw-bold">📸 Apple Photo / Scan</button>
+                            <button id="cameraScanBtn" class="btn btn-hero-camera">
+                                <span>📹</span> <span>Live Camera</span>
+                            </button>
+                            <button type="button" id="photoScanBtn" class="btn btn-hero-photo">
+                                <span>📸</span> <span>Apple Scan / Photo</span>
+                            </button>
                             <input type="file" id="cameraPhotoInput" accept="image/*" capture="environment" style="display:none;">
                         </div>
 
                         <!-- Camera Viewfinder & Floating Mobile Controls -->
-                        <div class="camera-wrapper mb-2" id="cameraWrapper" style="display:none;">
-                            <!-- Aiming Guide Badge at top of viewfinder -->
+                        <div class="camera-wrapper mb-3" id="cameraWrapper" style="display:none;">
+                            <!-- Top Aiming Guide Badge -->
                             <div id="ocrAimGuide" class="camera-aim-badge" style="display:none;">
                                 🎯 Center text & tap Read Text
                             </div>
+
+                            <!-- Quick Close Camera Button -->
+                            <button type="button" id="closeCameraBtn" class="camera-close-btn" title="Close Camera">✕</button>
 
                             <!-- Live Camera Viewfinder -->
                             <div id="camera-region"></div>
 
                             <!-- Floating Controls pinned inside viewfinder at bottom -->
                             <div id="cameraControls" class="camera-floating-controls" style="display:none;">
-                                <button type="button" id="zoomBtn" class="btn btn-dark-overlay" style="display:none;">🔍 2x</button>
+                                <button type="button" id="zoomBtn" class="btn btn-hud" style="display:none;">🔍 2x</button>
                                 <button type="button" id="ocrCaptureBtn" class="btn btn-shutter shadow">📸 Read Text</button>
-                                <button type="button" id="torchBtn" class="btn btn-dark-overlay" style="display:none;">🔦 Light</button>
+                                <button type="button" id="torchBtn" class="btn btn-hud" style="display:none;">🔦 Light</button>
                             </div>
                         </div>
 
                         <!-- Manual input fallback -->
-                        <div class="mb-2">
-                            <label class="form-label small text-muted fw-bold">Or type / paste a code:</label>
-                            <div class="input-group">
-                                <span class="input-group-text bg-light">🔍</span>
-                                <input type="text" id="scanInput" class="form-control" placeholder="Serial or Tag..."
+                        <div class="mb-3">
+                            <div class="search-pill">
+                                <input type="text" id="scanInput" placeholder="Type or paste Serial or Tag..."
                                     autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
-                                <button class="btn btn-temple" type="button" id="manualLookupBtn">Go</button>
+                                <button type="button" id="manualLookupBtn">Go</button>
                             </div>
                         </div>
 
                         <!-- OCR Detected Candidates Chips -->
-                        <div id="ocrCandidatesContainer" class="mb-3 p-2 bg-light rounded border" style="display:none;">
+                        <div id="ocrCandidatesContainer" class="mb-3 p-2 bg-light rounded-3 border" style="display:none;">
                             <div class="d-flex justify-content-between align-items-center mb-1">
                                 <span class="small text-muted fw-bold">🎯 Detected Labels (tap to fill):</span>
                                 <button type="button" class="btn-close" id="closeCandidatesBtn" style="font-size:0.6rem;" aria-label="Close"></button>
@@ -524,32 +784,38 @@
 
                         <!-- Details form -->
                         <form id="detailsForm">
-                            <div class="row g-2">
+                            <div class="row g-2 mb-2">
                                 <div class="col-6">
-                                    <label class="form-label small text-muted">Equipment Type</label>
-                                    <input type="text" id="equipType" class="form-control" placeholder="e.g. Computer">
+                                    <div class="form-card">
+                                        <label class="form-card-label" for="equipType">Equipment Type</label>
+                                        <input type="text" id="equipType" class="form-card-input" placeholder="e.g. Computer">
+                                    </div>
                                 </div>
                                 <div class="col-6">
-                                    <label class="form-label small text-muted">Item Description</label>
-                                    <input type="text" id="itemDesc" class="form-control" placeholder="e.g. Dell Optiplex">
+                                    <div class="form-card">
+                                        <label class="form-card-label" for="itemDesc">Item Description</label>
+                                        <input type="text" id="itemDesc" class="form-card-input" placeholder="e.g. Dell Optiplex">
+                                    </div>
                                 </div>
                                 <div class="col-6">
-                                    <label class="form-label small text-muted">Serial Number</label>
-                                    <input type="text" id="serialNum" class="form-control fw-bold">
+                                    <div class="form-card highlight-field">
+                                        <label class="form-card-label" style="color:var(--temple-cherry);" for="serialNum">Serial Number *</label>
+                                        <input type="text" id="serialNum" class="form-card-input fw-bold" placeholder="Required">
+                                    </div>
                                 </div>
                                 <div class="col-6">
-                                    <label class="form-label small text-muted">Temple Tag</label>
-                                    <input type="text" id="templeTag" class="form-control">
+                                    <div class="form-card">
+                                        <label class="form-card-label" for="templeTag">Temple Tag</label>
+                                        <input type="text" id="templeTag" class="form-card-input" placeholder="Optional tag">
+                                    </div>
                                 </div>
                             </div>
 
                             <div class="status-bar mt-3">
-                                <span id="statusBadge" class="badge bg-secondary p-2">Ready to Scan</span>
+                                <span id="statusBadge" class="status-pill">Ready to Scan</span>
                                 <div class="d-flex gap-2">
-                                    <button type="button" id="clearBtn"
-                                        class="btn btn-outline-danger btn-sm">Reset Batch</button>
-                                    <button type="submit" id="saveBtn"
-                                        class="btn btn-temple px-4">Add to Batch</button>
+                                    <button type="button" id="clearBtn" class="btn btn-outline-danger btn-sm rounded-pill">Reset</button>
+                                    <button type="submit" id="saveBtn" class="btn btn-temple px-3 fw-bold shadow-sm">+ Add to Batch</button>
                                 </div>
                             </div>
                         </form>
@@ -557,12 +823,17 @@
                 </div>
 
                 <!-- BATCH TAB -->
-                <div class="tab-content-section active" id="batch-tab">
+                <div class="tab-content-section" id="batch-tab">
                     <div class="scanner-box pt-3">
-                        <h6 class="text-uppercase text-muted fw-bold small mb-2">Currently in this Batch</h6>
-                        <div id="batchCount" class="text-muted small mb-2"></div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div>
+                                <h5 class="m-0 text-dark fw-bold" style="font-size:1.05rem;">Current Batch</h5>
+                                <div id="batchCount" class="text-muted small"></div>
+                            </div>
+                            <button class="btn btn-warning btn-sm fw-bold rounded-pill" onclick="document.getElementById('finalizeBtn').click();">Finish Batch</button>
+                        </div>
                         <div class="table-responsive">
-                            <table class="table table-sm table-hover align-middle" id="recentTable">
+                            <table class="table table-hover align-middle mb-0" id="recentTable">
                                 <thead class="table-light">
                                     <tr>
                                         <th>Type</th>
@@ -579,11 +850,11 @@
                 </div>
             </div>
 
-            <!-- Sidebar / FILES TAB -->
+            <!-- Sidebar / FILES TAB for Desktop -->
             <div class="col-md-5 desktop-sidebar">
                 <div class="scanner-box" id="files-section-desktop">
-                    <h5 class="text-dark mb-3" style="font-size:1rem;">Completed Scans</h5>
-                    <p class="text-muted small">Download these files to submit to CRC.</p>
+                    <h5 class="text-dark mb-2" style="font-size:1.05rem; font-weight:700;">Completed Scans</h5>
+                    <p class="text-muted small mb-3">Download these files to submit to CRC.</p>
                     <table class="table table-hover align-middle">
                         <tbody id="fileListBody"></tbody>
                     </table>
@@ -594,8 +865,8 @@
             <div class="col-12">
                 <div class="tab-content-section" id="files-tab">
                     <div class="scanner-box">
-                        <h5 class="text-dark mb-3" style="font-size:1rem;">Completed Scans</h5>
-                        <p class="text-muted small">Download these files to submit to CRC.</p>
+                        <h5 class="text-dark mb-2" style="font-size:1.05rem; font-weight:700;">Completed Scans</h5>
+                        <p class="text-muted small mb-3">Download these files to submit to CRC.</p>
                         <table class="table table-hover align-middle">
                             <tbody id="fileListBodyMobile"></tbody>
                         </table>
@@ -604,6 +875,23 @@
             </div>
         </div>
     </div>
+
+    <!-- Mobile Fixed Bottom Tab Bar (iOS Native Style) -->
+    <nav class="mobile-tabs" id="mobileTabs" aria-label="Mobile Navigation">
+        <button class="active" data-tab="scanner-tab">
+            <span class="tab-icon">📷</span>
+            <span class="tab-label">Scanner</span>
+        </button>
+        <button data-tab="batch-tab">
+            <span class="tab-icon">📋</span>
+            <span class="tab-label">Batch</span>
+            <span id="batchTabBadge" class="badge-count" style="display:none;">0</span>
+        </button>
+        <button data-tab="files-tab">
+            <span class="tab-icon">📁</span>
+            <span class="tab-label">Files</span>
+        </button>
+    </nav>
 
     <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
