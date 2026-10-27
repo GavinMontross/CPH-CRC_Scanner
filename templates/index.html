@@ -290,11 +290,6 @@
             background: var(--temple-dark);
         }
 
-        .apple-tip-bar {
-            font-size: 0.74rem;
-            color: #64748b;
-        }
-
         /* --- Status Bar & Actions --- */
         .status-bar {
             display: flex;
@@ -609,16 +604,12 @@
                         </div>
 
                         <!-- Manual Input Bar -->
-                        <div class="mb-2">
+                        <div class="mb-3">
                             <div class="search-pill">
                                 <span class="search-icon">🔍</span>
                                 <input type="text" id="scanInput" placeholder="Type or paste Serial or Tag..."
                                     autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="search">
                                 <button type="button" id="manualLookupBtn">Go</button>
-                            </div>
-                            <div class="apple-tip-bar mt-1 px-1 d-flex align-items-center gap-1">
-                                <span>💡</span>
-                                <span><strong>iPhone Tip:</strong> Tap any field and select <em>"Scan Text"</em> to insert with Apple Camera.</span>
                             </div>
                         </div>
 
