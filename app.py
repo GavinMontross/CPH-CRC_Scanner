@@ -78,14 +78,11 @@ SSO_REDIRECT_URI = os.getenv("SSO_REDIRECT_URI") or os.getenv("AZURE_REDIRECT_UR
 SSO_SCOPES = "openid profile email User.Read"
 
 # Authorized AD / Entra Group Object IDs
-# Derived from Paley Conference Dashboard configuration:
-# - afd02e22-938a-49ae-b86b-660f8bb70f5b: CPH-PaleyConferenceDashboard - AD
-# - 9d5bcc98-312b-4d60-97bb-be9b9c2b0d34: CPH Deans Office - Entra
-# - 54956bf4-79e4-434d-8bdd-3deda3cb9131: CPH-PaleyConference-RoomPermissions - Entra
+# - 0d1a93f6-3804-421e-a73f-2ba7bf0bb889: CPH-CPHIT-Administrators
+# - 78f9833c-b9af-477b-8974-b9a98314505e: CPH-CPHIT-Student Workers
 DEFAULT_ALLOWED_GROUPS = [
-    "afd02e22-938a-49ae-b86b-660f8bb70f5b",
-    "9d5bcc98-312b-4d60-97bb-be9b9c2b0d34",
-    "54956bf4-79e4-434d-8bdd-3deda3cb9131",
+    "0d1a93f6-3804-421e-a73f-2ba7bf0bb889",
+    "78f9833c-b9af-477b-8974-b9a98314505e",
 ]
 env_groups = os.getenv("ALLOWED_ADMIN_GROUPS")
 if env_groups:
